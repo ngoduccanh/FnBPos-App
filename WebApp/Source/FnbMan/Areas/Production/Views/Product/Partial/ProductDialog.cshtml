@@ -1,0 +1,55 @@
+﻿<style type="text/css">
+    .modal-dialog {
+        width: 70%!important;
+    }
+
+    .modal-dialog-mobile {
+        margin-left: 5px;
+        margin-top: 10px;
+        width: 96%;
+    }
+    .popover {
+        z-index: 9999 !important;
+    }
+
+    @@media (min-width: 576px) {
+    .modal-dialog {
+        /* max-width: var(--bs-modal-width); */
+        margin-right: auto;
+        margin-left: auto;
+    }
+}
+</style>
+<script>    
+    var deviceType = @Html.Raw(Json.Encode(ViewBag.deviceType ?? ""));
+</script>
+<div class="modal fade" id="product-dialog-id" ng-controller="ProdManController" ng-cloak
+     style="overflow-y: auto; z-index: 1060 !important;"
+     data-bs-backdrop="static" data-bs-keyboard="true" aria-hidden="false">
+    <div ng-class="{'modal-dialog-mobile': deviceType == 1, 'modal-dialog': deviceType != 1 }">
+        <div class="modal-content">
+            <div class="modal-header">
+                @*<a class="btn-sm btn-primary" ng-if="filterModel.IsEditable" ng-click="onSaveProduct(); $event.preventDefault(); $event.stopPropagation();"
+                       id="saveId" style="cursor: pointer; float: right; margin-right: 12px; font-size: 16px;" title="Cập nhật">
+                        <i class="fa fa-floppy-o" aria-hidden="true"></i>
+                    </a>*@
+                <h2 class="modal-title" ng-if="deviceType != 1">{{getTitle()}}</h2>
+                <h3 class="modal-title" ng-if="deviceType == 1">{{getTitle()}}</h3>
+                <a class="btn-sm btn-danger" aria-label="Đóng" data-dismiss="modal" data-bs-dismiss="modal" id="closeId" style="cursor: pointer; float: right; font-size: 16px;" title="Đóng" ng-click="onCancel()">
+                    <i class="fa fa-close"></i>
+                </a>
+            </div>
+            <div class="modal-body form-horizontal" style="padding:3px;" ng-if="filterModel.IsClinic == true">
+                @Html.Partial("~/Areas/Production/Views/Product/Partial/ProductClinicPartial.cshtml")
+            </div>
+            <div class="modal-body form-horizontal" style="padding:3px;" ng-if="filterModel.IsClinic == false">
+                @Html.Partial("~/Areas/Production/Views/Product/Partial/ProductPartial.cshtml")
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" ng-if="filterModel.IsEditable" ng-click="onSaveProduct(); $event.preventDefault(); $event.stopPropagation();" id="saveId" ng-disabled="isPrevent">Cập nhật</button>&nbsp;&nbsp;&nbsp;
+                <button type="button" class="btn btn-default" data-dismiss="modal" data-bs-dismiss="modal" ng-click="onCancel()">Đóng</button>
+            </div>
+        </div><!-- /.modal-content -->
+    </div><!-- /.modal-dialog -->
+</div><!-- /.modal -->
+@Html.Partial("~/Areas/Production/Views/Common/Partial/ObjectDialog.cshtml")
