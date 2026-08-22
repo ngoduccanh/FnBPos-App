@@ -1,0 +1,36 @@
+{
+  "name": "fnbmanv2",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@lucide/vue": "^1.28.0",
+    "@tanstack/vue-query": "^5.101.4",
+    "axios": "^1.19.0",
+    "dexie": "^4.4.4",
+    "dompurify": "^3.4.12",
+    "lucide-vue-next": "^1.0.0",
+    "pinia": "^4.0.2",
+    "qz-tray": "^2.2.6",
+    "signalr-no-jquery": "^0.2.1",
+    "vue": "^3.5.40",
+    "vue-router": "^5.2.0",
+    "vue-virtual-scroller": "^3.0.4"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^24.13.3",
+    "@vitejs/plugin-basic-ssl": "^2.3.0",
+    "@vitejs/plugin-vue": "^6.0.8",
+    "@vue/tsconfig": "^0.9.1",
+    "tailwindcss": "^4.3.3",
+    "typescript": "~6.0.2",
+    "vite": "^8.2.0",
+    "vue-tsc": "^3.3.8"
+  }
+}

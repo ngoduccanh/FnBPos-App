@@ -1,0 +1,64 @@
+/* ==========================================================================
+   🟦 BLUE SCROLLBAR GLOBAL THEME (THANH CUỘN XANH DƯƠNG CHUẨN TOÀN BỘ WEB)
+   ========================================================================== */
+
+/* 1. Thanh cuộn mặc định cho Toàn Bộ Trang Web (WebKit & Blink Browsers) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9; /* Slate 100 */
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3b82f6; /* Blue 500 */
+  border-radius: 9999px;
+  border: 2px solid #f1f5f9; /* Tạo viền mỏng cách lề êm mắt */
+  transition: background-color 0.2s ease-in-out;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2563eb; /* Blue 600 khi rê chuột */
+}
+
+::-webkit-scrollbar-thumb:active {
+  background: #1d4ed8; /* Blue 700 khi bấm giữ */
+}
+
+/* 2. Dành cho Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #3b82f6 #f1f5f9;
+}
+
+/* 3. UTILITY CLASS: Thanh cuộn mỏng màu xanh đẹp mắt (.custom-blue-scrollbar) */
+.custom-blue-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+.custom-blue-scrollbar::-webkit-scrollbar-track {
+  background: rgba(241, 245, 249, 0.6);
+  border-radius: 9999px;
+}
+
+.custom-blue-scrollbar::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border-radius: 9999px;
+}
+
+.custom-blue-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #1d4ed8;
+}
+
+/* 4. UTILITY CLASS: Ẩn hoàn toàn thanh cuộn nhưng vẫn cho phép trượt (.no-scrollbar) */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
