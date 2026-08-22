@@ -32,6 +32,14 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
   const authStore = useAuthStore();
   const appStore = useAppStore();
 
+  // 1. Quản lý giỏ hàng POS & UI States (khởi tạo trước để syncToCustomerDisplay dùng an toàn)
+  const cart = usePosCart();
+  const isMobileCartOpen = ref<boolean>(false);
+  const isRefreshingProducts = ref<boolean>(false);
+  const customerSearch = ref<string>('');
+  const isExportInvoice = ref<boolean>(false);
+  const orderNote = ref<string>('');
+
   // Đồng bộ giỏ hàng sang Màn hình phụ (Customer Facing Display)
   const syncToCustomerDisplay = () => {
     const currentTable = table();
@@ -47,7 +55,7 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
       storePhone: selectedStore?.phone || selectedStore?.Phone || ''
     };
 
-    const displayItems: CustomerDisplayCartItem[] = cart.cartItems.value.map(item => ({
+    const displayItems: CustomerDisplayCartItem[] = (cart.cartItems?.value || []).map(item => ({
       productId: item.productId,
       productCode: item.code || '',
       productName: item.name,
@@ -61,14 +69,14 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
     broadcastOrdering(
       currentTable.name || `Bàn #${currentTable.id}`,
       displayItems,
-      cart.cartTotalQuantity.value,
-      cart.cartTotal.value,
+      cart.cartTotalQuantity?.value || 0,
+      cart.cartTotal?.value || 0,
       customerSearch.value || 'Khách lẻ',
       storeInfo
     );
   };
 
-  // 1. Quản lý sản phẩm & nhóm sản phẩm
+  // 2. Quản lý sản phẩm & nhóm sản phẩm
   const {
     products,
     isLoading: productsLoading,
@@ -82,7 +90,7 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
     fetchProductGroupOptions
   } = useProductGroupOptions();
 
-  // 2. Tìm kiếm & lọc thực đơn món ăn
+  // 3. Tìm kiếm & lọc thực đơn món ăn
   const {
     selectedGroupId,
     productSearchQuery,
@@ -92,9 +100,6 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
     loadMoreProducts
   } = useFilterProducts(products);
 
-  // 3. Quản lý giỏ hàng POS
-  const cart = usePosCart();
-
   // 4. Nạp chi tiết đơn từ bàn
   const { isCartLoading, loadCartOrderDetail } = useOrderDetail();
 
@@ -102,13 +107,6 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
   const { isSavingOrder, handleSaveOrderTemporarily: saveOrderFn } = usePosSaveOrder();
   const { isCancelling, cancelOrder: cancelOrderFn } = usePosCancelOrder();
   const { isPrinting, printKitchenFromCart, printBillFromCart } = usePosPrinter();
-
-  // 7. UI States
-  const isMobileCartOpen = ref<boolean>(false);
-  const isRefreshingProducts = ref<boolean>(false);
-  const customerSearch = ref<string>('');
-  const isExportInvoice = ref<boolean>(false);
-  const orderNote = ref<string>('');
 
   // 8. Xử lý reload thực đơn món
   const handleReloadProducts = async () => {
