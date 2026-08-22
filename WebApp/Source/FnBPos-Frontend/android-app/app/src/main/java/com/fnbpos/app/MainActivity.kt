@@ -161,6 +161,10 @@ class MainActivity : AppCompatActivity() {
         return displays.isNotEmpty()
     }
 
+    fun sendPayloadToCustomer(payloadJson: String) {
+        customerPresentation?.postPayload(payloadJson)
+    }
+
     fun reloadCustomerDisplay() {
         val baseUrl = getBaseUrl().trimEnd('/')
         customerPresentation?.loadUrl("$baseUrl/customer-display")

@@ -65,6 +65,13 @@ class CustomerPresentation(
         }
     }
 
+    fun postPayload(payloadJson: String) {
+        if (::webView.isInitialized) {
+            val escaped = payloadJson.replace("\\", "\\\\").replace("'", "\\'")
+            webView.evaluateJavascript("window.updateCustomerDisplayFromNative && window.updateCustomerDisplayFromNative('$escaped')", null)
+        }
+    }
+
     fun loadUrl(url: String) {
         targetUrl = url
         if (::webView.isInitialized) {

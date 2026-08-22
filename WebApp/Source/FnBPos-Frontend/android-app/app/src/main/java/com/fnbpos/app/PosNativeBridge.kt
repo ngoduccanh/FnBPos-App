@@ -25,6 +25,13 @@ class PosNativeBridge(
     }
 
     @JavascriptInterface
+    fun sendToCustomerDisplay(payloadJson: String) {
+        mainActivity.runOnUiThread {
+            mainActivity.sendPayloadToCustomer(payloadJson)
+        }
+    }
+
+    @JavascriptInterface
     fun reloadCustomerScreen() {
         mainActivity.runOnUiThread {
             mainActivity.reloadCustomerDisplay()
@@ -33,7 +40,6 @@ class PosNativeBridge(
 
     @JavascriptInterface
     fun openCashDrawer() {
-        // Có thể tích hợp mở ngăn kéo tiền qua cổng ESC/POS tại đây
         mainActivity.runOnUiThread {
             Toast.makeText(context, "Đã gửi lệnh mở két tiền", Toast.LENGTH_SHORT).show()
         }

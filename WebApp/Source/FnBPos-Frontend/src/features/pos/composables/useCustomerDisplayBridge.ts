@@ -14,7 +14,7 @@ const STORAGE_KEY = 'pos_customer_display_state';
 const currentPayload = ref<CustomerDisplayPayload>({
   mode: 'IDLE',
   storeInfo: {
-    storeName: 'FnB POS',
+    storeName: 'BeePos247',
     storeAddress: '',
     storePhone: ''
   },
@@ -31,7 +31,9 @@ let sharedBroadcastChannel: BroadcastChannel | null = null;
 function getBroadcastChannel(): BroadcastChannel | null {
   if (typeof window === 'undefined') return null;
   if (!sharedBroadcastChannel && 'BroadcastChannel' in window) {
-    sharedBroadcastChannel = new BroadcastChannel(CHANNEL_NAME);
+    try {
+      sharedBroadcastChannel = new BroadcastChannel(CHANNEL_NAME);
+    } catch {}
   }
   return sharedBroadcastChannel;
 }
@@ -48,16 +50,27 @@ export function useCustomerDisplayBridge() {
     };
 
     currentPayload.value = fullPayload;
+    const jsonString = JSON.stringify(fullPayload);
 
-    // 1. Gửi qua BroadcastChannel (0ms, nhanh nhất)
+    // 1. Gửi qua BroadcastChannel (0ms - Dành cho trình duyệt PC / Chrome đa tab)
     const channel = getBroadcastChannel();
     if (channel) {
-      channel.postMessage(fullPayload);
+      try {
+        channel.postMessage(fullPayload);
+      } catch {}
     }
 
-    // 2. Lưu vào localStorage để cửa sổ mới mở lên nhận được ngay lập tức
+    // 2. Lưu vào localStorage (Dùng cho cả Web và Android WebView)
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(fullPayload));
+      localStorage.setItem(STORAGE_KEY, jsonString);
+    } catch {}
+
+    // 3. Gửi qua Android Native Bridge (0ms - Dành cho App Android 2 màn hình)
+    try {
+      const nativeBridge = (window as any).PosNativeBridge;
+      if (nativeBridge && typeof nativeBridge.sendToCustomerDisplay === 'function') {
+        nativeBridge.sendToCustomerDisplay(jsonString);
+      }
     } catch {}
   };
 
@@ -141,36 +154,62 @@ export function useCustomerDisplayBridge() {
    * 📥 LẮNG NGHE Ở PHÍA MÀN HÌNH PHỤ (CLIENT)
    */
   const initClientListener = () => {
-    // 1. Nạp state ban đầu từ localStorage nếu có
+    let lastUpdatedAt = 0;
+
+    const applyPayload = (raw: string | object) => {
+      try {
+        const data: CustomerDisplayPayload = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        if (data && (!data.updatedAt || data.updatedAt >= lastUpdatedAt)) {
+          lastUpdatedAt = data.updatedAt || Date.now();
+          currentPayload.value = data;
+        }
+      } catch {}
+    };
+
+    // 1. Nạp state ban đầu từ localStorage
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        currentPayload.value = JSON.parse(saved);
-      }
+      if (saved) applyPayload(saved);
     } catch {}
 
     // 2. Lắng nghe qua BroadcastChannel
     const channel = getBroadcastChannel();
     if (channel) {
       channel.onmessage = (event) => {
-        if (event.data) {
-          currentPayload.value = event.data;
-        }
+        if (event.data) applyPayload(event.data);
       };
     }
 
-    // 3. Lắng nghe sự kiện storage (dự phòng)
+    // 3. Lắng nghe sự kiện storage
     const handleStorage = (event: StorageEvent) => {
       if (event.key === STORAGE_KEY && event.newValue) {
-        try {
-          currentPayload.value = JSON.parse(event.newValue);
-        } catch {}
+        applyPayload(event.newValue);
       }
     };
     window.addEventListener('storage', handleStorage);
 
+    // 4. Đăng ký hàm nhận dữ liệu từ Native Android Bridge
+    (window as any).updateCustomerDisplayFromNative = (rawJson: string) => {
+      applyPayload(rawJson);
+    };
+
+    // 5. Polling định kỳ kiểm tra localStorage (Bảo hiểm 100% cho 2 WebView độc lập trên Android)
+    const pollTimer = setInterval(() => {
+      try {
+        const saved = localStorage.getItem(STORAGE_KEY);
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          if (parsed && parsed.updatedAt && parsed.updatedAt > lastUpdatedAt) {
+            lastUpdatedAt = parsed.updatedAt;
+            currentPayload.value = parsed;
+          }
+        }
+      } catch {}
+    }, 250);
+
     return () => {
       window.removeEventListener('storage', handleStorage);
+      clearInterval(pollTimer);
     };
   };
 
