@@ -33,7 +33,7 @@ class MainActivity : AppCompatActivity() {
         private const val PREFS_NAME = "PosAppPrefs"
         private const val KEY_BASE_URL = "base_url"
         // IP mặc định của máy tính phát triển trong mạng LAN
-        private const val DEFAULT_BASE_URL = "http://192.168.2.185:5173"
+        private const val DEFAULT_BASE_URL = "https://192.168.2.185:5173"
     }
 
     private val displayListener = object : DisplayManager.DisplayListener {
