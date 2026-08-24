@@ -68,6 +68,8 @@ class MainActivity : AppCompatActivity() {
 
         // 3. Khởi tạo WebView Màn hình chính (Thu ngân)
         mainWebView = findViewById(R.id.mainWebView)
+        mainWebView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
+        
         val settings: WebSettings = mainWebView.settings
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
@@ -76,16 +78,38 @@ class MainActivity : AppCompatActivity() {
         settings.allowContentAccess = true
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
+        settings.setSupportZoom(false)
+        settings.builtInZoomControls = false
+        settings.displayZoomControls = false
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        @Suppress("DEPRECATION")
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH)
 
-        // Cầu nối Javascript Native Bridge
-        mainWebView.addJavascriptInterface(PosNativeBridge(this, this), "PosNativeBridge")
+        // Cầu nối Javascript Native Bridge (Hỗ trợ PosNativeBridge, AndroidPosPrinter, Android)
+        val bridge = PosNativeBridge(this, this)
+        mainWebView.addJavascriptInterface(bridge, "PosNativeBridge")
+        mainWebView.addJavascriptInterface(bridge, "AndroidPosPrinter")
+        mainWebView.addJavascriptInterface(bridge, "Android")
+        mainWebView.addJavascriptInterface(bridge, "AndroidBridge")
 
         mainWebView.webViewClient = object : WebViewClient() {
             @SuppressLint("WebViewClientOnReceivedSslError")
             override fun onReceivedSslError(view: WebView?, handler: SslErrorHandler?, error: SslError?) {
                 // Cho phép chạy local HTTPS / Self-signed certificate
                 handler?.proceed()
+            }
+
+            override fun shouldOverrideUrlLoading(view: WebView?, url: String?): Boolean {
+                if (url != null && (url.startsWith("rawbt:") || url.startsWith("intent:") || url.startsWith("quickprinter:"))) {
+                    try {
+                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url))
+                        startActivity(intent)
+                        return true
+                    } catch (_: Exception) {
+                        return true
+                    }
+                }
+                return false
             }
         }
         mainWebView.webChromeClient = WebChromeClient()

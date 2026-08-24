@@ -6,6 +6,12 @@ import { mapProductList } from '../mappers/productsMapper';
 import { posProductCacheService } from '@/services/posDexieDB/posProductCacheService';
 import type { PosProductItem, ProductFilterParams } from '../types/products.types';
 
+// 🚀 SINGLETON RAM CACHE — Lưu trữ danh sách sản phẩm trong RAM, không bao giờ phải nạp lại khi đổi bàn (0ms delay)
+const sharedProducts = ref<PosProductItem[]>([]);
+const sharedTotalSize = ref<number>(0);
+const isSharedLoading = ref<boolean>(false);
+const sharedError = ref<string | null>(null);
+
 /**
  * ⚡ HOOK QUẢN LÝ VÀ FETCH DANH SÁCH SẢN PHẨM / THỰC ĐƠN POS VỚI DEXIE LOCAL DB CACHE
  */
@@ -13,15 +19,20 @@ export function useProducts() {
   const appStore = useAppStore();
   const authStore = useAuthStore();
 
-  const products = ref<PosProductItem[]>([]);
-  const totalSize = ref<number>(0);
-  const isLoading = ref<boolean>(false);
-  const error = ref<string | null>(null);
+  const products = sharedProducts;
+  const totalSize = sharedTotalSize;
+  const isLoading = isSharedLoading;
+  const error = sharedError;
 
   /**
    * 🚀 LẤY DANH SÁCH SẢN PHẨM TỪ BỘ NHỚ LOCAL DEXIE DB (0ms delay)
    */
   const loadProductsFromCache = async () => {
+    // Nếu đã có sẵn trong RAM thì trả về ngay lập tức không cần đọc DB
+    if (products.value.length > 0) {
+      return products.value;
+    }
+
     const cached = await posProductCacheService.getProducts();
     if (cached && cached.length > 0) {
       products.value = cached;
@@ -57,8 +68,8 @@ export function useProducts() {
       totalSize.value = pagingObj?.TotalSize || dataObj?.TotalSize || mappedList.length;
       products.value = mappedList;
 
-      // 💾 LƯU SẢN PHẨM VÀO DEXIE LOCAL DB
-      await posProductCacheService.saveProducts(mappedList);
+      // 💾 LƯU SẢN PHẨM VÀO DEXIE LOCAL DB TRONG NỀN
+      posProductCacheService.saveProducts(mappedList);
 
       return products.value;
     } catch (err: any) {

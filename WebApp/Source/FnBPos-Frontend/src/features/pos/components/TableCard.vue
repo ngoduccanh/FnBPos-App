@@ -1,17 +1,17 @@
 <template>
   <div
     @click="$emit('select', table)"
-    class="group relative rounded-3xl p-5 transition-all duration-200 cursor-pointer border flex flex-col justify-between select-none h-[195px] overflow-hidden"
+    class="group relative rounded-3xl p-5 transition-colors duration-100 cursor-pointer border flex flex-col justify-between select-none h-[195px] overflow-hidden"
     :class="[
       // Bàn đang chọn Active
-      isSelected ? 'ring-4 ring-blue-600/30 border-blue-600 scale-[1.02] shadow-xl z-10' : '',
+      isSelected ? 'ring-4 ring-blue-600/30 border-blue-600 shadow-md z-10' : '',
 
       // Style theo Trạng thái Bàn KiotViet Standard
       table.status === 'USING'
-        ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-600/25 hover:bg-blue-700 hover:shadow-xl'
+        ? 'bg-blue-600 border-blue-600 text-white shadow-sm hover:bg-blue-700'
         : table.status === 'RESERVED'
-        ? 'bg-amber-50 border-amber-300 text-amber-900 hover:border-amber-400 hover:shadow-md'
-        : 'bg-white border-slate-200/90 text-slate-800 hover:border-blue-400 hover:shadow-lg hover:scale-[1.01]'
+        ? 'bg-amber-50 border-amber-300 text-amber-900 hover:border-amber-400'
+        : 'bg-white border-slate-200/90 text-slate-800 hover:border-blue-400'
     ]"
   >
     <!-- TOP HEADER: TÊN BÀN, ICON BÀN & BADGE TRẠNG THÁI -->
@@ -20,7 +20,7 @@
         <div class="flex items-center gap-3">
           <!-- ICON BÀN VECTOR TRẮNG MINIMALIST -->
           <div
-            class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold transition-all shrink-0"
+            class="w-10 h-10 rounded-2xl flex items-center justify-center font-bold transition-colors duration-100 shrink-0"
             :class="[
               table.status === 'USING'
                 ? 'bg-white/20 text-white'
@@ -52,7 +52,7 @@
           <!-- NÚT XEM/IN MÃ QR BÀN -->
           <button
             @click.stop="$emit('open-qr', table)"
-            class="w-7 h-7 rounded-lg flex items-center justify-center transition-all cursor-pointer"
+            class="w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer"
             :class="[
               table.status === 'USING'
                 ? 'bg-white/20 hover:bg-white/35 text-white'
@@ -70,7 +70,7 @@
             class="px-2.5 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider"
             :class="[
               table.status === 'USING'
-                ? 'bg-white/20 text-white backdrop-blur-xs'
+                ? 'bg-white/25 text-white'
                 : table.status === 'RESERVED'
                 ? 'bg-amber-200 text-amber-900'
                 : 'bg-slate-100 text-slate-500 group-hover:bg-blue-50 group-hover:text-blue-600'

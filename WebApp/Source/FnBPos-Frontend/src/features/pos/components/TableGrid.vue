@@ -30,7 +30,7 @@
     </div>
 
     <!-- 🟢 4. LƯỚI SƠ ĐỒ BÀN (DƯỚI 18 INCH = 4 BÀN / HÀNG, TRÊN 18 INCH = 5 BÀN / HÀNG) -->
-    <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 min-[1800px]:grid-cols-5 gap-4 sm:gap-5">
+    <div v-else class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-4 min-[1800px]:grid-cols-5 gap-4 sm:gap-5 contain-content">
       <TableCard
         v-for="table in tables"
         :key="table.id"

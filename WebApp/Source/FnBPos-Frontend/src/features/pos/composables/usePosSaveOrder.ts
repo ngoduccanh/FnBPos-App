@@ -63,7 +63,7 @@ export function usePosSaveOrder() {
 
       // 2. Tính toán tổng số món, tổng tiền và giờ vào ngay trên Frontend
       const totalQty = cartItems.reduce((acc, it) => acc + (it.quantity || 1), 0);
-      const totalMoney = cartItems.reduce((acc, it) => acc + (it.totalPrice || (it.price * it.quantity) || 0), 0);
+      const totalMoney = cartItems.reduce((acc, it) => acc + ((it.product.retailOutPrice || 0) * it.quantity), 0);
       const currentTime = new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', hour12: false });
 
       // 3. Cập nhật lạc quan (Optimistic UI) trực tiếp vào Dexie Tables & Cart ngay lập tức (0ms)

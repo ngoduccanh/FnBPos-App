@@ -72,7 +72,7 @@
             <label class="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
               Phương thức kết nối
             </label>
-            <div class="grid grid-cols-3 gap-2.5">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
               <!-- QZ TRAY -->
               <div
                 @click="currentConfig.driver = 'qz-tray'"
@@ -128,6 +128,25 @@
                 </div>
                 <span class="text-xs">WiFi / LAN</span>
                 <span class="text-[10px] text-slate-400 font-normal">Cổng mạng IP</span>
+              </div>
+
+              <!-- TRÌNH DUYỆT (BROWSER) -->
+              <div
+                @click="currentConfig.driver = 'browser'"
+                class="p-3 rounded-2xl border-2 cursor-pointer transition-all flex flex-col items-center justify-center text-center gap-1.5"
+                :class="[
+                  currentConfig.driver === 'browser'
+                    ? 'border-blue-600 bg-blue-50/60 text-blue-700 font-bold shadow-xs'
+                    : 'border-slate-200 hover:border-slate-300 text-slate-600 bg-white'
+                ]"
+              >
+                <div class="w-8 h-8 rounded-xl flex items-center justify-center" :class="currentConfig.driver === 'browser' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600'">
+                  <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                </div>
+                <span class="text-xs">Trình duyệt</span>
+                <span class="text-[10px] text-slate-400 font-normal">Android Print</span>
               </div>
             </div>
           </div>
@@ -214,6 +233,19 @@
             <div v-if="usbDeviceName" class="text-xs text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 font-bold flex items-center gap-2">
               <span>Đã kết nối: {{ usbDeviceName }}</span>
             </div>
+          </div>
+
+          <!-- ── D. GIAO DIỆN TRÌNH DUYỆT (BROWSER PRINT / ANDROID SPOOLER) ── -->
+          <div v-if="currentConfig.driver === 'browser'" class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-2">
+            <div class="flex items-center gap-2 text-blue-700 font-bold text-xs">
+              <svg class="w-4 h-4 text-blue-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>In qua Dịch vụ in tiêu chuẩn của Android / Trình duyệt</span>
+            </div>
+            <p class="text-[11px] text-slate-500 leading-relaxed">
+              Hệ thống sẽ mở hộp thoại in của Android. Bạn có thể chọn máy in <strong>Quick Printer</strong> hoặc máy in USB của máy để in hóa đơn ra giấy mà không cần qua app phụ.
+            </p>
           </div>
 
           <!-- ── C. GIAO DIỆN WIFI / LAN IP ── -->

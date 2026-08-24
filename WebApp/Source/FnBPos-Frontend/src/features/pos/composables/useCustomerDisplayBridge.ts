@@ -193,7 +193,7 @@ export function useCustomerDisplayBridge() {
       applyPayload(rawJson);
     };
 
-    // 5. Polling định kỳ kiểm tra localStorage (Bảo hiểm 100% cho 2 WebView độc lập trên Android)
+    // 5. Polling định kỳ kiểm tra localStorage (Chỉ fallback bảo hiểm mỗi 1 giây)
     const pollTimer = setInterval(() => {
       try {
         const saved = localStorage.getItem(STORAGE_KEY);
@@ -205,7 +205,7 @@ export function useCustomerDisplayBridge() {
           }
         }
       } catch {}
-    }, 250);
+    }, 1000);
 
     return () => {
       window.removeEventListener('storage', handleStorage);

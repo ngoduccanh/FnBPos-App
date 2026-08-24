@@ -11,10 +11,9 @@ import { useMapOrderToTable } from '../composables/useMapOrderToTable';
 import { posTableCacheService } from '@/services/posDexieDB/posTableCacheService';
 import { posOrderCacheService } from '@/services/posDexieDB/posOrderCacheService';
 import { posProductCacheService } from '@/services/posDexieDB/posProductCacheService';
-import { posCartCacheService } from '@/services/posDexieDB/posCartCacheService';
+import { posCartCacheService, type TableCartCacheRecord } from '@/services/posDexieDB/posCartCacheService';
 import { clearAllPosDatabase } from '@/services/posDexieDB/posDatabase';
 import { signalRService } from '@/services/signalr/signalRService';
-import { getOrderDetailApi } from '../api/getOrderDetailApi';
 import { mapDeliveryNoteItemsToCart } from '../mappers/orderDetailMapper';
 import type { DeliveryNoteWithRoundsModel } from '@/shared/types/deliveryNote.types';
 import { useProducts } from '../hooks/useProducts';
@@ -29,9 +28,10 @@ export function usePosMain() {
   const router = useRouter();
   const authStore = useAuthStore();
   const appStore = useAppStore();
-  const { showSuccess, showError, showInfo } = useToast();
   const { session } = usePosInit();
+  const { showSuccess, showError } = useToast();
   const searchQuery = ref<string>('');
+  const isInitialSyncLoading = ref<boolean>(true);
 
 
   const { 
@@ -114,11 +114,11 @@ export function usePosMain() {
   
   /**
    * ⚡ ĐỒNG BỘ DỮ LIỆU TỪ SERVER:
-   * - Chỉ gọi ordersFromCache để lấy trạng thái đơn mới nhất
-   * - KHÔNG gọi lại /Objects (khu vực) vì đã lưu trong Dexie
+   * - Sử dụng 1 request duy nhất ordersFromCache
+   * - Trích xuất 100% noteItems lưu thẳng vào Dexie Cart của tất cả các bàn (0ms, KHÔNG gọi getOrderDetailApi)
    */
   const syncDataFromServer = async (silent = false) => {
-    // 1. Chỉ gọi ordersFromCache (1 request duy nhất)
+    // 1. Gọi ordersFromCache (1 request duy nhất)
     const rawOrders = await fetchOrdersFromCache({}, silent);
 
     // 2. Lấy danh sách bàn hiện tại từ RAM hoặc Dexie
@@ -133,84 +133,47 @@ export function usePosMain() {
     // 3. Map trạng thái đơn hàng vào sơ đồ bàn
     const finalTables = mapOrderToTable(currentTables, rawOrders || []);
 
-    // 4. Lưu lại vào Dexie DB & cập nhật UI
+    // 4. 🚀 LẤY 100% noteItems TỪ ordersFromCache VÀ BULK PUT VÀO DEXIE CART (0ms)
+    const bulkCartRecords: TableCartCacheRecord[] = [];
+    const activeTargetIds = new Set<number>();
+
+    (rawOrders || []).forEach(order => {
+      const targetId = order.targetId || 0;
+      const noteId = order.noteId || (order as any).id || 0;
+      const rawNoteItems = order.noteItems || [];
+
+      if (targetId > 0) {
+        activeTargetIds.add(targetId);
+        if (Array.isArray(rawNoteItems) && rawNoteItems.length > 0) {
+          const cartItems = mapDeliveryNoteItemsToCart(rawNoteItems);
+          if (cartItems.length > 0) {
+            bulkCartRecords.push({
+              targetId,
+              noteId,
+              items: cartItems,
+              updatedAt: new Date().toISOString()
+            });
+          }
+        }
+      }
+    });
+
+    // Tự động dọn dẹp các giỏ hàng không còn đơn trong Dexie DB
+    const existingCarts = await posCartCacheService.getAllTableCarts();
+    const cartsToDelete = existingCarts.filter(c => !activeTargetIds.has(c.targetId));
+    if (cartsToDelete.length > 0) {
+      await Promise.all(cartsToDelete.map(c => posCartCacheService.deleteTableCart(c.targetId)));
+    }
+
+    // 5. Ghi đồng loạt giỏ hàng và danh sách bàn vào Dexie DB trong 1 lệnh duy nhất
     await Promise.all([
+      bulkCartRecords.length > 0 ? posCartCacheService.saveBulkTableCarts(bulkCartRecords) : Promise.resolve(),
       posOrderCacheService.saveOrders(rawOrders || []),
       posTableCacheService.saveTables(finalTables)
     ]);
 
+    // 6. 🎯 Render UI sơ đồ bàn ngay lập tức (0ms)
     tables.value = finalTables;
-  };
-
-  /**
-   * 🚀 PRELOAD CHI TIẾT GIỎ HÀNG CỦA TẤT CẢ BÀN ĐANG CÓ ĐƠN
-   *
-   * Chạy ngầm sau khi init xong, KHÔNG block UI (không await ở ngoài).
-   * Mỗi bàn có noteId → gọi getOrderDetail → lưu vào Dexie Cart.
-   * Khi user bấm vào bàn → useOrderDetail đọc từ Dexie 0ms, không gọi API nữa.
-   *
-   * - Bỏ qua bàn đã có cache trong Dexie (kiểm tra 0ms trước khi gọi API)
-   * - Chạy song song tối đa CONCURRENCY=3 request cùng lúc (tránh overload server)
-   * - Lỗi từng bàn riêng lẻ không ảnh hưởng các bàn khác (Promise.allSettled)
-   */
-  const preloadAllTableOrderDetails = async () => {
-    const selectedStore: any = authStore.selectedStore;
-    const storeId = appStore.session?.id || appStore.currentStoreId || selectedStore?.id || selectedStore?.Id || 0;
-    if (!storeId) return;
-
-    const allTables = await posTableCacheService.getTables();
-
-    // Chỉ preload những bàn đang có đơn (noteId > 0)
-    const activeTables = allTables.filter(t => {
-      const noteId = t.noteId
-        || (t as any).activeOrder?.noteId
-        || (t as any).orderInfo?.noteId
-        || 0;
-      return t.id > 0 && noteId > 0;
-    });
-
-    if (activeTables.length === 0) return;
-
-    console.log(`🚀 [Preload] Bắt đầu preload ${activeTables.length} bàn đang có đơn vào Dexie Cart...`);
-
-    // Chạy song song theo batch 3 request để không overload server
-    const CONCURRENCY = 3;
-    for (let i = 0; i < activeTables.length; i += CONCURRENCY) {
-      const batch = activeTables.slice(i, i + CONCURRENCY);
-      await Promise.allSettled(batch.map(async (t) => {
-        const targetId = t.id;
-        const noteId = t.noteId
-          || (t as any).activeOrder?.noteId
-          || (t as any).orderInfo?.noteId
-          || 0;
-
-        if (!noteId) return;
-
-        // Bỏ qua nếu Dexie đã có cache rồi (0ms)
-        const existingCache = await posCartCacheService.getTableCart(targetId);
-        if (existingCache && existingCache.length > 0) {
-          console.log(`⚡ [Preload] Bàn ID ${targetId} đã có cache (${existingCache.length} món) - bỏ qua`);
-          return;
-        }
-
-        try {
-          const res: any = await getOrderDetailApi(storeId, noteId, targetId);
-          const dataObj = res?.data?.Data || res?.Data || res?.data || {};
-          const noteItems = dataObj?.noteItems || dataObj?.NoteItems || [];
-          const cartItems = mapDeliveryNoteItemsToCart(noteItems);
-
-          if (cartItems.length > 0) {
-            await posCartCacheService.saveTableCart(targetId, noteId, cartItems);
-            console.log(`✅ [Preload] Bàn ID ${targetId}: cache ${cartItems.length} món`);
-          }
-        } catch (err) {
-          // Lỗi 1 bàn không ảnh hưởng bàn khác
-          console.warn(`[Preload] Bỏ qua Bàn ID ${targetId}:`, err);
-        }
-      }));
-    }
-
-    console.log('✅ [Preload] Hoàn tất - tất cả bàn đã được preload vào Dexie Cart.');
   };
 
 
@@ -238,8 +201,17 @@ export function usePosMain() {
   const handleSwitchStore = async () => {
     await clearAllPosDatabase();
     appStore.clearAppStore();
-    authStore.selectedStore = null;
-    router.push('/select-store');
+    router.push('/stores');
+  };
+
+  const handleRefreshStore = async () => {
+    if (!session.value?.id) return;
+    try {
+      await appStore.loadStoreSession(session.value.id);
+      showSuccess('Làm mới thông tin cửa hàng thành công!', 'Thành công');
+    } catch (err: any) {
+      showError(err?.message || 'Không thể làm mới thông tin cửa hàng', 'Thất bại');
+    }
   };
 
   let unsubSignalR: (() => void) | null = null;
@@ -257,8 +229,6 @@ export function usePosMain() {
       const noteId = Number(payloadData?.NoteId || payloadData?.noteId || 0);
       const targetId = Number(payloadData?.TargetId || payloadData?.targetId || payloadData?.TableId || payloadData?.tableId || 0);
       const tableName = payloadData?.TableName || payloadData?.tableName || '';
-      const selectedStore: any = authStore.selectedStore;
-      const storeId = appStore.session?.id || appStore.currentStoreId || selectedStore?.id || selectedStore?.Id || payloadData?.StoreId || 0;
 
       const msgText = String(data?.Message || data?.message || payloadData?.Message || payloadData?.message || (typeof payloadData === 'string' ? payloadData : '')).toLowerCase();
       const isDeleteAction = payloadData?.OrderAction === 'DELETE' || payloadData?.Action === 'DeleteOrder' || msgText.includes('xóa đơn') || msgText.includes('xoá đơn') || msgText.includes('hủy đơn') || msgText.includes('huỷ đơn');
@@ -298,23 +268,6 @@ export function usePosMain() {
         try {
           await syncDataFromServer(true);
           tables.value = await posTableCacheService.getTables();
-
-          // Cập nhật luôn giỏ hàng của bàn vừa nhận signal
-          if (!isDeleteAction && storeId && noteId && targetId) {
-            try {
-              const res: any = await getOrderDetailApi(storeId, noteId, targetId);
-              const dataObj = res?.data?.Data || res?.Data || res?.data || {};
-              const noteItems = dataObj?.noteItems || dataObj?.NoteItems || [];
-              const cartItems = mapDeliveryNoteItemsToCart(noteItems);
-
-              if (cartItems.length > 0) {
-                await posCartCacheService.saveTableCart(targetId, noteId, cartItems);
-                console.log(`⚡ [SignalR] Đã nạp và lưu chi tiết món cho ${tableName || `Bàn ID ${targetId}`}:`, cartItems.length, 'món');
-              }
-            } catch (detailErr) {
-              console.warn('[SignalR] Không thể nạp chi tiết đơn hàng:', detailErr);
-            }
-          }
         } catch (err) {
           console.error('[usePosMain] Lỗi tự động đồng bộ sau SignalR broadcast:', err);
         }
@@ -323,65 +276,27 @@ export function usePosMain() {
 
     const unsubPos = signalRService.onReceivedSystemMessagePos(handlePosSignal);
 
-    // ⚡ Handler riêng cho TRANSFER TABLE — xử lý cả bàn nguồn lẫn bàn đích
+    // ⚡ Handler riêng cho TRANSFER TABLE từ SignalR
     const handleTransferSignal = async (data: any) => {
       console.log('⚡ [usePosMain] Nhận tín hiệu SignalR TRANSFER TABLE:', data);
 
-      const payloadData = data?.Data || data?.data || data;
-      const sourceTableId = Number(payloadData?.SourceTableId || payloadData?.sourceTableId || 0);
-      const targetId = Number(payloadData?.TargetId || payloadData?.targetId || payloadData?.TableId || payloadData?.tableId || 0);
-      const noteId = Number(payloadData?.NoteId || payloadData?.noteId || 0);
-      const selectedStore: any = authStore.selectedStore;
-      const storeId = appStore.session?.id || appStore.currentStoreId || selectedStore?.id || selectedStore?.Id || payloadData?.StoreId || 0;
-      const isTransferAll = payloadData?.IsTransferAll ?? payloadData?.isTransferAll ?? true;
+      const payloadData = data?.Data || data?.data || data || {};
+      const sourceTableId = Number(payloadData?.SourceTableId || payloadData?.sourceTableId || payloadData?.FromTableId || payloadData?.fromTableId || payloadData?.SourceId || payloadData?.sourceId || 0);
+      const targetId = Number(payloadData?.TargetId || payloadData?.targetId || payloadData?.TargetTableId || payloadData?.targetTableId || payloadData?.TableId || payloadData?.tableId || payloadData?.ToTableId || payloadData?.toTableId || 0);
+      const isTransferAll = Boolean(payloadData?.IsTransferAll ?? payloadData?.isTransferAll ?? false);
 
-      // ── 1. Xử lý BÀN NGUỒN: Xóa cart & reset trạng thái trong Dexie ─────────
-      if (sourceTableId > 0) {
-        if (isTransferAll) {
-          // Chuyển toàn bộ → xóa hết cart bàn nguồn
-          await posCartCacheService.deleteTableCart(sourceTableId);
-          await posTableCacheService.clearTableOrderOptimistic(sourceTableId);
-        } else {
-          // Tách bàn → xóa cache cart bàn nguồn (sẽ được load lại khi user click vào)
+      try {
+        if (sourceTableId > 0 && isTransferAll) {
           await posCartCacheService.deleteTableCart(sourceTableId);
         }
-        console.log(`⚡ [Transfer Signal] Đã reset Dexie Cart & trạng thái Bàn nguồn ID ${sourceTableId}`);
+
+        // Đồng bộ toàn bộ dữ liệu bàn và giỏ hàng từ ordersFromCache
+        await syncDataFromServer(true);
+        tables.value = await posTableCacheService.getTables();
+        console.log(`⚡ [usePosMain] Đã đồng bộ xong chuyển bàn (Source: ${sourceTableId}, Target: ${targetId})`);
+      } catch (err) {
+        console.error('[usePosMain] Lỗi xử lý SignalR Transfer:', err);
       }
-
-      // ── 2. Xử lý BÀN ĐÍCH: Xóa cache cart cũ → sẽ được reload khi click vào ─
-      if (targetId > 0) {
-        await posCartCacheService.deleteTableCart(targetId);
-      }
-
-      // ── 3. Reload tables.value từ Dexie ngay (0ms) ──────────────────────────
-      tables.value = await posTableCacheService.getTables();
-
-      // ── 4. Đồng bộ nền: syncDataFromServer + reload cart bàn đích từ server ──
-      if (debounceTimer) clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(async () => {
-        try {
-          await syncDataFromServer(true);
-          tables.value = await posTableCacheService.getTables();
-
-          // Reload cart bàn đích từ server
-          if (storeId && noteId && targetId) {
-            try {
-              const res: any = await getOrderDetailApi(storeId, noteId, targetId);
-              const dataObj = res?.data?.Data || res?.Data || res?.data || {};
-              const noteItems = dataObj?.noteItems || dataObj?.NoteItems || [];
-              const cartItems = mapDeliveryNoteItemsToCart(noteItems);
-              if (cartItems.length > 0) {
-                await posCartCacheService.saveTableCart(targetId, noteId, cartItems);
-                console.log(`⚡ [Transfer Signal] Đã cache ${cartItems.length} món cho Bàn đích ID ${targetId}`);
-              }
-            } catch (detailErr) {
-              console.warn('[Transfer Signal] Không thể nạp chi tiết bàn đích:', detailErr);
-            }
-          }
-        } catch (err) {
-          console.error('[usePosMain] Lỗi đồng bộ sau SignalR transfer:', err);
-        }
-      }, 300);
     };
 
     const unsubTransfer = signalRService.onReceivedTableTransferPos(handleTransferSignal);
@@ -406,14 +321,17 @@ export function usePosMain() {
       unsubReconnect();
     };
 
-    // 2. Nạp dữ liệu ban đầu
-    fetchTableArea();
-    const hasLocalTables = await posTableCacheService.hasTables();
-
-    if (hasLocalTables) {
+    // 2. Nạp dữ liệu ban đầu: Đồng bộ dữ liệu ngầm và nạp vào Dexie DB
+    isInitialSyncLoading.value = true;
+    try {
+      fetchTableArea();
+      await syncDataFromServer(true);
+    } catch (err) {
+      console.warn('[usePosMain] Lỗi đồng bộ khởi tạo:', err);
+      // Fallback nạp từ Dexie nếu mất mạng
       tables.value = await posTableCacheService.getTables();
-    } else {
-      await syncDataFromServer();
+    } finally {
+      isInitialSyncLoading.value = false;
     }
 
     const [hasProducts, hasGroups] = await Promise.all([
@@ -430,12 +348,6 @@ export function usePosMain() {
       const { fetchProductGroupOptions } = useProductGroupOptions();
       fetchProductGroupOptions();
     }
-
-    // 3. 🚀 Preload ngầm chi tiết giỏ hàng tất cả bàn đang có đơn vào Dexie Cart
-    // Chạy KHÔNG await → không block UI, hoạt động hoàn toàn ở nền
-    preloadAllTableOrderDetails().catch(err => {
-      console.warn('[usePosMain] Preload ngầm bị lỗi (không ảnh hưởng UI):', err);
-    });
   });
 
   onUnmounted(() => {
@@ -451,6 +363,7 @@ export function usePosMain() {
     searchQuery,
     tables,
     tablesLoading,
+    isInitialSyncLoading,
     tablesError,
     selectedGroupId,
     selectedStatus,

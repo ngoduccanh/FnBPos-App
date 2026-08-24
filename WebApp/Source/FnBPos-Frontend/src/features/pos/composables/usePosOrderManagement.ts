@@ -542,15 +542,19 @@ export function usePosOrderManagement(isOpen: () => boolean) {
       // Gọi API xóa đơn
       if (noteId > 0) {
         await deleteOrderCacheApi(storeId, {
+          NoteId: noteId,
+          TargetId: targetId,
+          StoreId: storeId,
           storeId,
           targetId,
           noteId,
           noteNumber: 0
         });
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Không thể xóa đơn.';
       console.error('[usePosOrderManagement] Lỗi xóa đơn:', err);
-      showError(err?.message || 'Không thể xóa đơn.');
+      showError(msg);
     } finally {
       isActionProcessing.value = false;
     }

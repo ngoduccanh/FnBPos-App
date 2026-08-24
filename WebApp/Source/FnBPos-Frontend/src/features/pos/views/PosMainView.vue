@@ -16,9 +16,32 @@
 
     <div class="flex-1 flex overflow-hidden relative">
 
+      <!-- ⏳ TRẠNG THÁI LOADING KHI VỪA VÀO TRANG (GIỮ HEADER, NỀN TRẮNG TOÀN BỘ, DẤU CHẤM CHẠY LÊN XUỐNG) -->
+      <div
+        v-if="isInitialSyncLoading"
+        class="flex-1 flex flex-col items-center justify-center bg-white z-40 select-none animate-in fade-in duration-150"
+      >
+        <div class="flex flex-col items-center justify-center p-8 text-center max-w-sm">
+          <!-- 🔵 CÁC DẤU CHẤM NẰM TRÊN CÙNG 1 HÀNG CHẠY LÊN CHẠY XUỐNG (WAVE BOUNCE) -->
+          <div class="flex items-center justify-center gap-3 h-14 mb-2">
+            <span class="inline-block w-4 h-4 rounded-full bg-blue-600 dot-1 shadow-sm"></span>
+            <span class="inline-block w-4 h-4 rounded-full bg-blue-500 dot-2 shadow-sm"></span>
+            <span class="inline-block w-4 h-4 rounded-full bg-blue-500 dot-3 shadow-sm"></span>
+            <span class="inline-block w-4 h-4 rounded-full bg-blue-600 dot-4 shadow-sm"></span>
+          </div>
+
+          <h3 class="text-lg font-bold text-slate-800 tracking-tight">
+            Đang tải dữ liệu...
+          </h3>
+          <p class="text-xs text-slate-400 mt-1">
+            Đang đồng bộ sơ đồ bàn và thực đơn
+          </p>
+        </div>
+      </div>
+
       <!-- 🟢 1. HIỂN THỊ MÀN HÌNH CHI TIẾT ĐƠN BÀN KHI ĐÃ CHỌN BÀN (TABLE ORDER DETAIL VIEW) -->
       <TableOrderDetailView
-        v-if="selectedTable"
+        v-else-if="selectedTable"
         :table="selectedTable"
         :allTables="tables"
         @back="handleBackToTables"
@@ -26,7 +49,7 @@
       />
 
       <!-- 🟢 2. HIỂN THỊ SƠ ĐỒ BÀN KHI CHƯA CHỌN BÀN (TABLE GRID VIEW) -->
-      <template v-else>
+      <div v-else class="flex-1 flex overflow-hidden min-w-0">
         <TakeawaySidebar
           :isOpen="isMobilePanelOpen"
           @close="isMobilePanelOpen = false"
@@ -76,7 +99,7 @@
             @retry="fetchTableOptions"
           />
         </main>
-      </template>
+      </div>
 
     </div>
 
@@ -126,6 +149,7 @@ import { useToast } from '@/shared/components/toast/composables/useToast';
 import { useAppStore } from '@/stores/appStore';
 import { QzTrayDriver } from '@/services/printer/drivers/qzTrayDriver';
 import { posTableCacheService } from '@/services/posDexieDB/posTableCacheService';
+import { posProductCacheService } from '@/services/posDexieDB/posProductCacheService';
 import TakeawaySidebar from '../components/TakeawaySidebar.vue';
 import TableQrModal from '../components/TableQrModal.vue';
 import OrderManagementModal from '../components/OrderManagementModal.vue';
@@ -137,6 +161,9 @@ import TableStatusFilter from '../components/TableStatusFilter.vue';
 import TableOrderDetailView from '../components/TableOrderDetailView.vue';
 import { usePosMain } from '../composables/usePosMain';
 import { useCustomerDisplayBridge } from '../composables/useCustomerDisplayBridge';
+import { useProducts } from '../hooks/useProducts';
+import { useProductGroupOptions } from '../hooks/useProductGroupOptions';
+import type { PosTableItem } from '../types/tables.types';
 
 const { broadcastIdle } = useCustomerDisplayBridge();
 
@@ -146,6 +173,7 @@ const {
   searchQuery,
   tables,
   tablesLoading,
+  isInitialSyncLoading,
   tablesError,
   selectedGroupId,
   selectedStatus,
@@ -165,12 +193,25 @@ const {
   selectTable
 } = usePosMain();
 
-// 🔌 Khởi tạo trước kết nối QZ Tray trong nền (Warm-up) trên PC/Windows (không chạy trên Android)
+// 🔌 Khởi tạo trước kết nối QZ Tray & Tải sẵn thực đơn vào RAM (Warm-up)
+const { loadProductsFromCache, fetchProducts } = useProducts();
+const { loadProductGroupsFromCache, fetchProductGroupOptions } = useProductGroupOptions();
+
 onMounted(() => {
   const isAndroid = typeof navigator !== 'undefined' && /Android/i.test(navigator.userAgent);
   if (!isAndroid) {
     QzTrayDriver.connect();
   }
+
+  // ⚡ Tải trước toàn bộ thực đơn vào RAM ngay khi mở app POS (Warm-up Menu)
+  posProductCacheService.hasProducts().then(has => {
+    if (has) loadProductsFromCache();
+    else fetchProducts();
+  });
+  posProductCacheService.hasProductGroups().then(has => {
+    if (has) loadProductGroupsFromCache();
+    else fetchProductGroupOptions();
+  });
 
   // Khởi tạo trạng thái Chờ cho màn hình phụ
   const selectedStore: any = authStore?.selectedStore;
@@ -247,20 +288,37 @@ const handleRefreshStore = async () => {
 </script>
 
 <style scoped>
-/* ANIMATION OFFLINE BANNER — mở rộng/thu gọn để đẩy toàn bộ trang lên xuống mượt mà */
-.offline-banner-enter-active,
-.offline-banner-leave-active {
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  max-height: 48px;
-  overflow: hidden;
+/* ANIMATION DOT-WAVE CHO LOADING — các dấu chấm nhấp nhô lượn sóng lên xuống */
+@keyframes dot-wave {
+  0%, 100% {
+    transform: translateY(0) scale(0.85);
+    opacity: 0.35;
+  }
+  50% {
+    transform: translateY(-20px) scale(1.25);
+    opacity: 1;
+    box-shadow: 0 10px 15px -3px rgba(37, 99, 235, 0.5);
+  }
 }
-.offline-banner-enter-from,
-.offline-banner-leave-to {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  opacity: 0;
-  border-top-width: 0;
+
+.dot-1 {
+  animation: dot-wave 1.1s infinite ease-in-out;
+  animation-delay: 0s;
+}
+
+.dot-2 {
+  animation: dot-wave 1.1s infinite ease-in-out;
+  animation-delay: 0.18s;
+}
+
+.dot-3 {
+  animation: dot-wave 1.1s infinite ease-in-out;
+  animation-delay: 0.36s;
+}
+
+.dot-4 {
+  animation: dot-wave 1.1s infinite ease-in-out;
+  animation-delay: 0.54s;
 }
 </style>
 

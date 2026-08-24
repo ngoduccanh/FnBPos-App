@@ -38,7 +38,7 @@ export function useMapOrderToTable() {
           totalAmount: matchedOrder.totalAmount || 0,
           prodCount: totalMondCount,
           timeStarted: formattedTime,
-          noteId: matchedOrder.noteId,
+          noteId: matchedOrder.id || (matchedOrder as any).noteId || (matchedOrder as any).Id || matchedOrder.noteNumber,
           noteNumber: matchedOrder.noteNumber
         };
       }
@@ -50,7 +50,9 @@ export function useMapOrderToTable() {
         customerName: undefined,
         totalAmount: 0,
         prodCount: 0,
-        timeStarted: undefined
+        timeStarted: undefined,
+        noteId: undefined,
+        noteNumber: undefined
       };
     });
   };

@@ -43,7 +43,7 @@ export interface BaseItem {
   sourceId: number;
   minQuantity?: number;
   maxQuantity?: number;
-  orderStatusId: number;
+  orderStatusId?: number;
   orderStatusName?: string;
   paymentTypeId: number;
   paymentTypeName?: string;

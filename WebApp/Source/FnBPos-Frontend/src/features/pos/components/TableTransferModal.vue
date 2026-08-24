@@ -2,10 +2,10 @@
   <Teleport to="body">
     <div
       v-if="isOpen"
-      class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-xs animate-fade-in"
+      class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 bg-slate-900/70 animate-fade-in"
       @click.self="close"
     >
-      <div class="bg-white w-full max-w-4xl max-h-[92vh] rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col animate-scale-up">
+      <div class="bg-white w-full max-w-4xl max-h-[92vh] rounded-3xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col transform-gpu will-change-transform">
         
         <!-- 🟢 1. HEADER MODAL -->
         <TableTransferHeader

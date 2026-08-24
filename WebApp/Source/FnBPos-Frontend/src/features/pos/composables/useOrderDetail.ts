@@ -24,14 +24,14 @@ export function useOrderDetail() {
     onSuccess: (items: CartItem[]) => void
   ): Promise<void> => {
     const targetId = table?.id || 0;
-    const noteId = table?.noteId || table?.activeOrder?.noteId || table?.orderInfo?.noteId || table?.orderInfo?.id || 0;
+    const noteId = table?.noteId || 0;
 
     if (!targetId) {
       onSuccess([]);
       return;
     }
 
-    // ── Bước 1: Thử đọc từ Dexie Local Cache trước theo targetId (0ms) ───────────────────
+    // ── Bước 1: Đọc trực tiếp từ Dexie Local Cache theo targetId (0ms) ───────────────────
     const localCartItems = await posCartCacheService.getTableCart(targetId);
     if (localCartItems && localCartItems.length > 0) {
       console.log(`⚡ [useOrderDetail] Nạp 0ms giỏ hàng cho Bàn ID ${targetId} từ DexieDB:`, localCartItems);

@@ -6,17 +6,24 @@ import { mapTableOptions } from '../mappers/tablesMapper';
 import { posProductCacheService } from '@/services/posDexieDB/posProductCacheService';
 import type { PosTableAreaGroup } from '../types/tables.types';
 
+// 🚀 SINGLETON RAM CACHE — Lưu trữ nhóm sản phẩm trong RAM, không bao giờ phải nạp lại khi chuyển bàn
+const sharedProductGroups = ref<PosTableAreaGroup[]>([]);
+const isSharedGroupsLoading = ref<boolean>(false);
+const sharedGroupsError = ref<string | null>(null);
 
 export function useProductGroupOptions() {
   const appStore = useAppStore();
   const authStore = useAuthStore();
 
-  const productGroups = ref<PosTableAreaGroup[]>([]);
-  const isLoading = ref<boolean>(false);
-  const error = ref<string | null>(null);
-
+  const productGroups = sharedProductGroups;
+  const isLoading = isSharedGroupsLoading;
+  const error = sharedGroupsError;
 
   const loadProductGroupsFromCache = async () => {
+    if (productGroups.value.length > 0) {
+      return productGroups.value;
+    }
+
     const cached = await posProductCacheService.getProductGroups();
     if (cached && cached.length > 0) {
       cached.sort((a, b) => (a.name || '').localeCompare(b.name || '', 'vi', { numeric: true }));
@@ -25,7 +32,6 @@ export function useProductGroupOptions() {
     }
     return [];
   };
-
 
   const fetchProductGroupOptions = async (extraParams?: Record<string, any>) => {
     const selectedStore: any = authStore.selectedStore;
@@ -48,7 +54,7 @@ export function useProductGroupOptions() {
 
       productGroups.value = mappedGroups;
 
-      await posProductCacheService.saveProductGroups(mappedGroups);
+      posProductCacheService.saveProductGroups(mappedGroups);
 
       return productGroups.value;
     } catch (err: any) {

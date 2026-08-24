@@ -368,6 +368,7 @@ const emit = defineEmits<{
   (e: 'logout'): void;
   (e: 'switch-store'): void;
   (e: 'refresh-store'): void;
+  (e: 'open-orders'): void;
 }>();
 
 const isDropdownOpen      = ref(false);

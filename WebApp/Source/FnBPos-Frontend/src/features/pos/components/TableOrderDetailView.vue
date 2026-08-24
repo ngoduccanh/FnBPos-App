@@ -186,7 +186,8 @@ const onConfirmTransfer = async (payload: {
     payload.isTransferAll,
     payload.itemsToMove,
     // onSuccess: Notify PosMainView reload tables.value từ Dexie (fix lỗi UI không cập nhật)
-    () => { emit('refresh-tables'); }
+    () => { emit('refresh-tables'); },
+    cartItems.value
   );
 
   if (success) {

@@ -33,9 +33,22 @@
   --shadow-lg: 0 10px 15px -3px rgba(37, 99, 235, 0.08), 0 4px 6px -4px rgba(37, 99, 235, 0.04);
 }
 
-/* RESET CƠ BẢN */
+/* RESET CƠ BẢN & 🚀 TỐI ƯU CẢM ỨNG CHẠM PHÁT ĂN NGAY (0ms DELAY) */
 *, *::before, *::after {
   box-sizing: border-box;
+}
+
+html, body {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
+}
+
+button, a, input, select, textarea, [role="button"], .cursor-pointer {
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 body {

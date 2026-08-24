@@ -24,7 +24,8 @@ export function usePosTransferTable() {
     targetTable: PosTableItem,
     isTransferAll: boolean,
     itemsToMove: TransferItemDto[],
-    onSuccess?: () => void | Promise<void>
+    onSuccess?: () => void | Promise<void>,
+    liveSourceCart?: CartItem[]
   ): Promise<boolean> => {
     if (!storeId || !sourceTable?.id || !targetTable?.id) {
       showError('Thông tin bàn chuyển không hợp lệ.');
@@ -39,8 +40,10 @@ export function usePosTransferTable() {
     isTransferring.value = true;
 
     try {
-      // 📸 1. CHỤP SNAPSHOT 2 BÀN & GIỎ HÀNG ĐỂ ROLLBACK NẾU GẶP LỖI
-      const sourceCartItems = await posCartCacheService.getTableCart(sourceTable.id);
+      // 📸 1. CHỤP SNAPSHOT 2 BÀN & GIỎ HÀNG (Ưu tiên liveSourceCart từ màn hình nếu có)
+      const sourceCartItems = (liveSourceCart && liveSourceCart.length > 0)
+        ? liveSourceCart
+        : await posCartCacheService.getTableCart(sourceTable.id);
       const targetCartItems = await posCartCacheService.getTableCart(targetTable.id);
 
       const sourceTableSnapshot: PosTableItem = JSON.parse(JSON.stringify(sourceTable));
@@ -56,7 +59,7 @@ export function usePosTransferTable() {
         // 🔄 CHUYỂN TOÀN BỘ BÀN:
         // Gộp tất cả món từ bàn nguồn sang bàn đích
         for (const srcItem of sourceCartItemsSnapshot) {
-          const existingIdx = newTargetItems.findIndex(t => t.product.productId === srcItem.product.productId);
+          const existingIdx = newTargetItems.findIndex(t => Number(t.product.productId) === Number(srcItem.product.productId));
           if (existingIdx >= 0 && newTargetItems[existingIdx]) {
             newTargetItems[existingIdx].quantity += srcItem.quantity;
           } else {
@@ -72,9 +75,12 @@ export function usePosTransferTable() {
         newSourceItems = JSON.parse(JSON.stringify(sourceCartItemsSnapshot));
 
         for (const moveItem of itemsToMove) {
-          const srcIdx = newSourceItems.findIndex(s => s.product.productId === moveItem.productId);
+          const moveProdId = Number(moveItem.productId);
+          const moveQty = Number(moveItem.quantityToMove);
+
+          const srcIdx = newSourceItems.findIndex(s => Number(s.product.productId) === moveProdId);
           if (srcIdx >= 0 && newSourceItems[srcIdx]) {
-            newSourceItems[srcIdx].quantity -= moveItem.quantityToMove;
+            newSourceItems[srcIdx].quantity -= moveQty;
 
             // Nếu số lượng <= 0 thì xóa khỏi bàn nguồn
             if (newSourceItems[srcIdx].quantity <= 0) {
@@ -83,15 +89,15 @@ export function usePosTransferTable() {
           }
 
           // Thêm / Gộp vào bàn đích
-          const tgtIdx = newTargetItems.findIndex(t => t.product.productId === moveItem.productId);
+          const tgtIdx = newTargetItems.findIndex(t => Number(t.product.productId) === moveProdId);
           if (tgtIdx >= 0 && newTargetItems[tgtIdx]) {
-            newTargetItems[tgtIdx].quantity += moveItem.quantityToMove;
+            newTargetItems[tgtIdx].quantity += moveQty;
           } else {
-            const originalSrc = sourceCartItemsSnapshot.find(s => s.product.productId === moveItem.productId);
+            const originalSrc = sourceCartItemsSnapshot.find(s => Number(s.product.productId) === moveProdId);
             if (originalSrc) {
               newTargetItems.push({
                 product: { ...originalSrc.product },
-                quantity: moveItem.quantityToMove
+                quantity: moveQty
               });
             }
           }
@@ -99,23 +105,26 @@ export function usePosTransferTable() {
       }
 
       // 💾 3. CẬP NHẬT GIỎ HÀNG DEXIE DB CHO 2 BÀN (0ms)
+      const sourceNoteId = sourceTable.noteId || 0;
+      const targetNoteId = targetTable.noteId || 0;
+
       if (newSourceItems.length > 0) {
-        await posCartCacheService.saveTableCart(sourceTable.id, 0, newSourceItems);
+        await posCartCacheService.saveTableCart(sourceTable.id, sourceNoteId, newSourceItems);
       } else {
         await posCartCacheService.deleteTableCart(sourceTable.id);
       }
 
       if (newTargetItems.length > 0) {
-        await posCartCacheService.saveTableCart(targetTable.id, 0, newTargetItems);
+        await posCartCacheService.saveTableCart(targetTable.id, targetNoteId, newTargetItems);
       } else {
         await posCartCacheService.deleteTableCart(targetTable.id);
       }
 
       // 📊 4. TÍNH TOÁN LẠI TỔNG TIỀN VÀ TRẠNG THÁI SƠ ĐỒ BÀN (DEXIE DB)
-      const sourceTotalAmount = newSourceItems.reduce((sum, item) => sum + item.quantity * (item.product.retailOutPrice || 0), 0);
+      const sourceTotalAmount = newSourceItems.reduce((sum, item) => sum + item.quantity * (Number(item.product.retailOutPrice || 0)), 0);
       const sourceTotalQty = newSourceItems.reduce((sum, item) => sum + item.quantity, 0);
 
-      const targetTotalAmount = newTargetItems.reduce((sum, item) => sum + item.quantity * (item.product.retailOutPrice || 0), 0);
+      const targetTotalAmount = newTargetItems.reduce((sum, item) => sum + item.quantity * (Number(item.product.retailOutPrice || 0)), 0);
       const targetTotalQty = newTargetItems.reduce((sum, item) => sum + item.quantity, 0);
 
       const allTables = await posTableCacheService.getTables();

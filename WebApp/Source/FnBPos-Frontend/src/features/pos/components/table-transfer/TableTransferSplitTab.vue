@@ -5,12 +5,12 @@
       <label class="font-black text-sm text-slate-800 uppercase tracking-wide mb-3 block">
         1. Chọn Bàn Đích Sẽ Nhận Món Tách:
       </label>
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[190px] overflow-y-auto p-1">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3 max-h-[190px] overflow-y-auto p-1 contain-content">
         <button
           v-for="tbl in selectableTables"
           :key="tbl.id"
           @click="$emit('update:selectedTargetTable', tbl)"
-          class="p-3.5 rounded-2xl border text-left transition-all cursor-pointer flex items-center justify-between active:scale-95 shadow-2xs"
+          class="p-3.5 rounded-2xl border text-left transition-colors duration-100 cursor-pointer flex items-center justify-between shadow-2xs"
           :class="[
             selectedTargetTable?.id === tbl.id
               ? 'border-blue-600 bg-blue-50 ring-2 ring-blue-600/30 shadow-sm'
@@ -45,7 +45,11 @@
             </tr>
           </thead>
           <tbody class="divide-y divide-slate-100">
-            <tr v-for="item in cartItems" :key="item.product.productId" class="hover:bg-slate-50/80 transition-colors">
+            <tr
+              v-for="item in cartItems"
+              :key="item.product.productId"
+              class="hover:bg-slate-50/80 transition-colors"
+            >
               <!-- TÊN MÓN -->
               <td class="py-3.5 px-5 font-black text-slate-900 text-sm">
                 {{ item.product.productName }}

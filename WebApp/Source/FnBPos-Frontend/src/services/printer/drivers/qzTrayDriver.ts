@@ -27,6 +27,20 @@ export class QzTrayDriver {
   private static isSecurityInitialized = false;
   private static signatureCache = new Map<string, string>();
 
+  public static setSecurity(
+    certPromise: () => Promise<string>,
+    signaturePromise: (toSign: string) => Promise<string>
+  ) {
+    qz.security.setCertificatePromise((resolve: (cert: string) => void) => {
+      certPromise().then(resolve);
+    });
+    qz.security.setSignaturePromise((toSign: string) => {
+      return (resolve: (sig: string) => void) => {
+        signaturePromise(toSign).then(resolve);
+      };
+    });
+  }
+
   /**
    * Tự động khởi tạo bảo mật (Certificate & Signature Endpoint)
    * Thuật toán: SHA1 (khớp với rsa.SignData SHA1 trong Controller C#)

@@ -1,36 +1,38 @@
 <template>
   <div
     @click="$emit('add-to-cart', product)"
-    class="bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 hover:shadow-lg transition-all duration-200 group cursor-pointer flex flex-col justify-between overflow-hidden select-none relative active:scale-[0.98] h-full"
+    class="bg-white rounded-2xl border border-slate-200/80 hover:border-blue-400 transition-colors duration-100 group cursor-pointer flex flex-col justify-between overflow-hidden select-none relative h-full"
   >
     <!-- TOP: KHU VỰC ẢNH SẢN PHẨM HOẶC ICON (CHUẨN SẮC TRẮNG LIỀN MẠCH) -->
     <div class="relative w-full aspect-[4/3] bg-white overflow-hidden shrink-0 flex items-center justify-center">
       
-      <!-- 🖼️ ẢNH THUMBNAIL SẢN PHẨM -->
+      <!-- 🖼️ ẢNH THUMBNAIL SẢN PHẨM (LAZY LOAD & ASYNC DECODE CHO MÁY POS ANDROID) -->
       <img
         v-if="product.imageThumbUrl || product.imageThumbBase64"
         :src="product.imageThumbUrl || product.imageThumbBase64 || ''"
         :alt="product.productName"
-        class="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300 ease-out"
+        loading="lazy"
+        decoding="async"
+        class="w-full h-full object-contain p-1"
       />
 
       <!-- 🖼️ PLACEHOLDER ICON VECTOR MÓN ĂN THƯƠNG HIỆU (KHI CHƯA CÓ ẢNH) -->
       <div v-else class="w-full h-full flex flex-col items-center justify-center bg-blue-50/50 text-blue-400 group-hover:text-blue-500 transition-colors">
-        <svg class="w-10 h-10 text-blue-300 group-hover:scale-110 transition-transform duration-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg class="w-10 h-10 text-blue-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
         </svg>
       </div>
 
       <!-- 🏷️ BADGE GIÁ NỔI BẬT NẰM ĐÈ LÊN ẢNH -->
       <div class="absolute bottom-2 left-2 z-10">
-        <span class="px-2.5 py-1 rounded-lg bg-orange-500 text-white font-extrabold text-xs shadow-sm border border-orange-400 tracking-tight">
+        <span class="px-2.5 py-1 rounded-lg bg-orange-500 text-white font-extrabold text-xs shadow-xs border border-orange-400 tracking-tight">
           {{ product.formattedPrice }}
         </span>
       </div>
 
       <!-- BADGE HOT GÓC TRÊN TRÁI -->
       <div v-if="product.isHot" class="absolute top-2 left-2 z-10">
-        <span class="px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-[9px] shadow-xs uppercase tracking-wider">
+        <span class="px-2 py-0.5 rounded-md bg-rose-600 text-white font-black text-[9px] shadow-2xs uppercase tracking-wider">
           🔥 HOT
         </span>
       </div>
@@ -38,7 +40,7 @@
       <!-- BADGE TỒN KHO GÓC TRÊN PHẢI -->
       <div v-if="product.lastInventoryQuantity !== undefined" class="absolute top-2 right-2 z-10">
         <span
-          class="px-2 py-0.5 rounded-md font-bold text-[10px] shadow-xs border"
+          class="px-2 py-0.5 rounded-md font-bold text-[10px] shadow-2xs border"
           :class="[
             product.lastInventoryQuantity < 0
               ? 'bg-blue-600 text-white border-blue-500'

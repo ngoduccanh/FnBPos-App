@@ -95,7 +95,7 @@
       <Transition :name="slideTransition" mode="out-in">
         <div
           :key="currentPage"
-          class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pb-2 will-change-transform"
+          class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3.5 pb-2 will-change-transform contain-content"
         >
           <ProductCard
             v-for="product in pageProducts"

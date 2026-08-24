@@ -1,26 +1,20 @@
 <template>
-  <div class="p-2.5 sm:p-3 bg-white hover:bg-slate-50/80 transition-all border-b border-slate-100 flex items-center gap-2 sm:gap-3 text-xs group">
+  <div class="p-2.5 sm:p-3 bg-white hover:bg-slate-50/80 transition-colors duration-100 border-b border-slate-100 flex items-center gap-2 sm:gap-3 text-xs group">
     
     <!-- 1. STT TRONG VÒNG TRÒN DỊU -->
     <div class="w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-slate-100/80 text-slate-500 font-extrabold text-[10px] sm:text-[11px] flex items-center justify-center shrink-0">
       {{ index + 1 }}
     </div>
 
-    <!-- 2. TÊN SẢN PHẨM & BADGE ĐƠN VỊ TÍNH NẰM CẠNH NHAU (HOÀN TOÀN TỰ ĐỘNG XUỐNG HÀNG TRÊN MOBILE ĐỂ KHÔNG BỊ TRUY CẮT "B... CÁI") -->
+    <!-- 2. TÊN SẢN PHẨM & ĐƠN GIÁ -->
     <div class="flex-1 min-w-0 pr-1">
-      <div class="flex flex-wrap items-center gap-1.5">
-        <h5 class="font-bold text-slate-800 text-xs sm:text-sm leading-snug group-hover:text-blue-600 transition-colors break-words max-w-full" :title="item.product.productName">
-          {{ item.product.productName }}
-        </h5>
-        <!-- BADGE ĐƠN VỊ TÍNH HIỆN ĐẠI (CHỮ BLUE DỊU) -->
-        <span v-if="item.product.retailUnitName" class="px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-600 font-extrabold text-[10px] shrink-0 border border-blue-100">
-          {{ item.product.retailUnitName }}
-        </span>
-      </div>
+      <h5 class="font-bold text-slate-800 text-xs sm:text-sm leading-snug group-hover:text-blue-600 transition-colors break-words max-w-full" :title="item.product.productName">
+        {{ item.product.productName }}
+      </h5>
 
       <!-- ĐƠN GIÁ NHỎ PHÍA DƯỚI -->
       <div class="text-[10px] sm:text-[11px] text-slate-400 font-medium mt-0.5">
-        Đơn giá: <span class="font-semibold text-slate-600">{{ formatPriceOnly(item.product.retailOutPrice) }}đ</span>
+        Đơn giá: <span class="font-semibold text-slate-600">{{ formatPriceOnly(item.product.retailPrice || item.product.retailOutPrice || item.product.price) }}đ</span>
       </div>
     </div>
 
@@ -52,7 +46,7 @@
 
     <!-- 4. THÀNH TIỀN CHỮ XANH NỔI BẬT KHÔNG BỊ CO NÉN -->
     <div class="shrink-0 text-right font-black text-blue-600 text-xs sm:text-base tracking-tight min-w-[55px] sm:min-w-[75px]">
-      {{ formatMoney((item.product.retailOutPrice || 0) * item.quantity) }}
+      {{ formatMoney(((item.product.retailPrice || item.product.retailOutPrice || item.product.price) || 0) * item.quantity) }}
     </div>
 
     <!-- 5. THAO TÁC: NOTE & THÙNG RÁC XÓA (NÚT PHÓNG TO RỘNG RÃI DỄ CHẠM BẤM) -->

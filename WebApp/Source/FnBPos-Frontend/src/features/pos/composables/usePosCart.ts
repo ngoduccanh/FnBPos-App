@@ -11,7 +11,7 @@ export function usePosCart() {
   // ── COMPUTED TỔNG HỢP ──────────────────────────────────────────────────────
   const cartTotalAmount = computed(() => {
     return cartItems.value.reduce(
-      (sum, item) => sum + (Number(item.product.retailOutPrice || 0) * item.quantity),
+      (sum, item) => sum + (Number(item.product.retailPrice || item.product.retailOutPrice || item.product.price || 0) * item.quantity),
       0
     );
   });

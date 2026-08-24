@@ -12,6 +12,7 @@ import { posCartCacheService } from '@/services/posDexieDB/posCartCacheService';
 import { posOrderCacheService } from '@/services/posDexieDB/posOrderCacheService';
 import { signalRService } from '@/services/signalr/signalRService';
 import { getOrderDetailApi } from '../api/getOrderDetailApi';
+import { getOrderFromCacheApi } from '../api/getOrderApi';
 import { mapDeliveryNoteItemsToCart } from '../mappers/orderDetailMapper';
 import { useToast } from '@/shared/components/toast/composables/useToast';
 import { useConfirm } from '@/shared/components/confirm/composables/useConfirm';
@@ -55,22 +56,30 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
       storePhone: selectedStore?.phone || selectedStore?.Phone || ''
     };
 
-    const displayItems: CustomerDisplayCartItem[] = (cart.cartItems?.value || []).map(item => ({
-      productId: item.productId,
-      productCode: item.code || '',
-      productName: item.name,
-      unitName: item.unitName || '',
-      quantity: item.quantity,
-      price: item.price,
-      totalAmount: item.totalAmount || (item.quantity * item.price),
-      note: item.note || ''
-    }));
+    const displayItems: CustomerDisplayCartItem[] = (cart.cartItems?.value || []).map((item: any) => {
+      const prod = item?.product || item || {};
+      const price = Number(prod.retailOutPrice || prod.retailPrice || 0);
+      const qty = Number(item?.quantity || 1);
+      return {
+        productId: Number(prod.productId || prod.id || 0),
+        productCode: String(prod.productCode || prod.code || ''),
+        productName: String(prod.productName || prod.name || prod.prodName || 'Món ăn'),
+        unitName: String(prod.retailUnitName || prod.unitName || prod.unit || ''),
+        quantity: qty,
+        price: price,
+        totalAmount: price * qty,
+        note: String(item?.note || prod.note || '')
+      };
+    });
+
+    const totalAmount = displayItems.reduce((sum, item) => sum + item.totalAmount, 0);
+    const totalQty = displayItems.reduce((sum, item) => sum + item.quantity, 0);
 
     broadcastOrdering(
       currentTable.name || `Bàn #${currentTable.id}`,
       displayItems,
-      cart.cartTotalQuantity?.value || 0,
-      cart.cartTotal?.value || 0,
+      cart.cartTotalQuantity?.value || totalQty,
+      cart.cartTotalAmount?.value || totalAmount,
       customerSearch.value || 'Khách lẻ',
       storeInfo
     );
@@ -238,46 +247,77 @@ export function useTableOrderDetail(table: () => PosTableItem | null) {
 
   // 14. Khởi tạo dữ liệu và lắng nghe SignalR cập nhật giỏ hàng theo thời gian thực (Real-time Cart Sync)
   onMounted(() => {
-    // ⚡ Lắng nghe tín hiệu SignalR khi người khác đặt món / sửa món bàn này
-    const unsubSignalR = signalRService.onReceivedSystemMessagePos(async (data: any) => {
-      const payloadData = data?.Data || data?.data || data;
-      const targetId = Number(payloadData?.TargetId || payloadData?.targetId || payloadData?.TableId || payloadData?.tableId || 0);
-      const noteId = Number(payloadData?.NoteId || payloadData?.noteId || 0);
+    // ⚡ Hàm nạp lại giỏ hàng từ Server và ghi vào Dexie DB & cập nhật UI trực tiếp
+    const syncCurrentTableCartFromServer = async (sourceId?: number, targetId?: number) => {
       const currentTable = table();
+      if (!currentTable?.id) return;
 
-      if (currentTable && currentTable.id === targetId) {
-        console.log(`⚡ [useTableOrderDetail] Bàn ${currentTable.name || targetId} vừa có người khác đặt món -> Cập nhật giỏ hàng ngay lập tức`);
+      const currentId = currentTable.id;
+      const selectedStore: any = authStore.selectedStore;
+      const storeId = appStore.session?.id || appStore.currentStoreId || selectedStore?.id || selectedStore?.Id || 0;
 
-        // 1. Thử đọc từ Dexie Cart trước
-        const cachedCart = await posCartCacheService.getTableCart(targetId);
-        if (cachedCart && cachedCart.length > 0) {
-          cart.setCartItems(cachedCart);
-        }
+      if (!storeId) return;
 
-        // 2. Tải chi tiết mới nhất từ server và gán vào giỏ hàng
-        const selectedStore: any = authStore.selectedStore;
-        const storeId = appStore.session?.id || appStore.currentStoreId || selectedStore?.id || selectedStore?.Id || payloadData?.StoreId || 0;
+      // ── Luôn gọi DUY NHẤT 1 API getOrderFromCacheApi từ Server
+      try {
+        const orderRes: any = await getOrderFromCacheApi(storeId);
+        const rawOrders = orderRes?.data?.result || orderRes?.data?.Result || orderRes?.data || orderRes?.result || [];
+        const matchedOrder = rawOrders.find((o: any) => Number(o.targetId || o.TargetId || o.tableId || o.TableId) === currentId);
 
-        if (storeId && noteId) {
-          try {
-            const res: any = await getOrderDetailApi(storeId, noteId, targetId);
-            const dataObj = res?.data?.Data || res?.Data || res?.data || {};
-            const noteItems = dataObj?.noteItems || dataObj?.NoteItems || [];
-            const items = mapDeliveryNoteItemsToCart(noteItems);
-
-            if (items.length > 0) {
-              cart.setCartItems(items);
-              await posCartCacheService.saveTableCart(targetId, noteId, items);
-            }
-          } catch (err) {
-            console.warn('[useTableOrderDetail] Lỗi tải chi tiết đơn hàng SignalR:', err);
+        if (!matchedOrder) {
+          // Bàn không còn đơn trên server -> làm trống giỏ hàng
+          cart.setCartItems([]);
+          await posCartCacheService.deleteTableCart(currentId);
+          syncToCustomerDisplay();
+          if (sourceId && currentId === sourceId) {
+            showSuccess(`Bàn ${currentTable.name || currentId} đã được chuyển toàn bộ sang bàn khác.`);
           }
+          return;
         }
+
+        const noteId = matchedOrder.noteId || matchedOrder.id || 0;
+        const noteItems = matchedOrder.noteItems || [];
+        const items = mapDeliveryNoteItemsToCart(noteItems);
+
+        if (items.length > 0) {
+          cart.setCartItems(items);
+          await posCartCacheService.saveTableCart(currentId, noteId, items);
+          syncToCustomerDisplay();
+
+          if (targetId && currentId === targetId) {
+            showSuccess(`Bàn ${currentTable.name || currentId} vừa nhận thêm món mới chuyển sang!`);
+          } else if (sourceId && currentId === sourceId) {
+            showSuccess(`Bàn ${currentTable.name || currentId} vừa tách bớt món sang bàn khác.`);
+          }
+          console.log(`⚡ [useTableOrderDetail] Đã nạp thành công ${items.length} món từ server cho Bàn #${currentId}`);
+        } else {
+          cart.setCartItems([]);
+          await posCartCacheService.deleteTableCart(currentId);
+          syncToCustomerDisplay();
+        }
+      } catch (err) {
+        console.warn('[useTableOrderDetail] Lỗi nạp lại giỏ hàng từ server:', err);
       }
-    });
+    };
+
+    // ⚡ Lắng nghe TẤT CẢ các loại bản tin SignalR (POS / Transfer / System / Broadcast)
+    const handleAnySignalR = async (data: any) => {
+      const payloadData = data?.Data || data?.data || data || {};
+      const sourceId = Number(payloadData?.SourceTableId || payloadData?.sourceTableId || payloadData?.FromTableId || payloadData?.fromTableId || payloadData?.SourceId || payloadData?.sourceId || 0);
+      const targetId = Number(payloadData?.TargetId || payloadData?.targetId || payloadData?.TargetTableId || payloadData?.targetTableId || payloadData?.TableId || payloadData?.tableId || payloadData?.ToTableId || payloadData?.toTableId || payloadData?.Id || payloadData?.id || 0);
+
+      console.log(`⚡ [useTableOrderDetail] 🔔 Nhận SignalR -> Gọi API lấy dữ liệu từ server (Source: ${sourceId}, Target: ${targetId})`);
+      await syncCurrentTableCartFromServer(sourceId, targetId);
+    };
+
+    const unsubSignalR = signalRService.onReceivedSystemMessagePos(handleAnySignalR);
+    const unsubTransfer = signalRService.onReceivedTableTransferPos(handleAnySignalR);
+    const unsubSystem = signalRService.onReceivedSystemMessage(handleAnySignalR);
 
     onUnmounted(() => {
       unsubSignalR();
+      unsubTransfer();
+      unsubSystem();
     });
 
     // Nạp cache sản phẩm

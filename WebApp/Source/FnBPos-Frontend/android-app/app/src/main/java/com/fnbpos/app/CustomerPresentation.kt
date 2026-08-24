@@ -6,6 +6,7 @@ import android.content.Context
 import android.net.http.SslError
 import android.os.Bundle
 import android.view.Display
+import android.view.View
 import android.view.WindowManager
 import android.webkit.SslErrorHandler
 import android.webkit.WebChromeClient
@@ -33,6 +34,7 @@ class CustomerPresentation(
         window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
         webView = findViewById(R.id.customerWebView)
+        webView.setLayerType(View.LAYER_TYPE_HARDWARE, null)
 
         val settings: WebSettings = webView.settings
         settings.javaScriptEnabled = true
@@ -45,6 +47,8 @@ class CustomerPresentation(
         settings.useWideViewPort = true
         settings.loadWithOverviewMode = true
         settings.cacheMode = WebSettings.LOAD_DEFAULT
+        @Suppress("DEPRECATION")
+        settings.setRenderPriority(WebSettings.RenderPriority.HIGH)
 
         webView.webViewClient = object : WebViewClient() {
             @SuppressLint("WebViewClientOnReceivedSslError")

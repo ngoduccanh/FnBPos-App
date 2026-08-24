@@ -5,7 +5,7 @@ import type { ProductDeliveryItem } from '@/shared/types/productDeliveryItem.typ
  * 🔄 Ánh xạ chi tiết từng dòng món ăn trong đơn hàng
  */
 export const mapNoteItem = (item: any): ProductDeliveryItem => {
-  const price = Number(item.retailPrice ?? item.price ?? item.retailOutPrice ?? item.outPrice ?? 0);
+  const price = Number(item.retailPrice || item.retailOutPrice || item.outPrice || item.price || item.prodRetailOutPrice || 0);
   const quantity = Number(item.quantity ?? item.retailQuantity ?? 1);
   const totalAmount = Number(item.totalAmount ?? (price * quantity));
 

@@ -42,12 +42,13 @@
       </div>
 
       <!-- LƯỚI DANH SÁCH BÀN -->
-      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 max-h-[320px] overflow-y-auto p-1">
+      <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5 max-h-[320px] overflow-y-auto p-1 contain-content">
         <button
           v-for="tbl in selectableTables"
           :key="tbl.id"
+          v-memo="[tbl.id, selectedTargetTable?.id === tbl.id, tbl.status]"
           @click="$emit('update:selectedTargetTable', tbl)"
-          class="p-4 rounded-2xl border text-left transition-all cursor-pointer flex flex-col justify-between h-24 active:scale-95 shadow-2xs"
+          class="p-4 rounded-2xl border text-left transition-colors duration-100 cursor-pointer flex flex-col justify-between h-24 shadow-2xs"
           :class="[
             selectedTargetTable?.id === tbl.id
               ? 'border-blue-600 bg-blue-50/90 ring-2 ring-blue-600/30 shadow-md'

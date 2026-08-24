@@ -21,7 +21,7 @@
       </div>
 
       <!-- DANH SÁCH THẺ DẠNG BẢNG CHUẨN IPOS -->
-      <div v-else class="divide-y divide-slate-100">
+      <div v-else class="divide-y divide-slate-100 contain-content">
         <PosCartItemCard
           v-for="(item, index) in cartItems"
           :key="item.product.productId"
