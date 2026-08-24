@@ -165,49 +165,62 @@ class PosNativeBridge(
                     context, 0, Intent(ACTION_USB_PERMISSION), flags
                 )
                 mainActivity.runOnUiThread {
-                    Toast.makeText(context, "🔐 Vui lòng bấm [Cho phép / OK] trên màn hình để cấp quyền máy in: ${device.productName ?: ""}", Toast.LENGTH_LONG).show()
+                    Toast.makeText(mainActivity, "🔐 Vui lòng bấm [Cho phép / OK] trên màn hình để cấp quyền máy in: ${device.productName ?: ""}", Toast.LENGTH_LONG).show()
                     usbManager.requestPermission(device, permissionIntent)
                 }
                 return false
             }
 
-            // 2. Mở kết nối và tìm Out Endpoint
-            for (i in 0 until device.interfaceCount) {
-                val usbInterface = device.getInterface(i)
-                var connection: UsbDeviceConnection? = null
-                try {
-                    connection = usbManager.openDevice(device)
-                    if (connection != null) {
-                        connection.claimInterface(usbInterface, true)
+            // 2. Mở kết nối USB 1 lần cho thiết bị
+            var connection: UsbDeviceConnection? = null
+            try {
+                connection = usbManager.openDevice(device)
+                if (connection == null) {
+                    Log.w(TAG, "Không thể mở kết nối tới ${device.productName} (Có thể đang bị app khác chiếm cổng)")
+                    continue
+                }
 
+                for (i in 0 until device.interfaceCount) {
+                    val usbInterface = device.getInterface(i)
+                    if (connection.claimInterface(usbInterface, true)) {
                         for (j in 0 until usbInterface.endpointCount) {
                             val endpoint = usbInterface.getEndpoint(j)
                             if (endpoint.direction == UsbConstants.USB_DIR_OUT) {
                                 val chunkSize = 4096
                                 var offset = 0
+                                var allSuccess = true
                                 while (offset < bytes.size) {
                                     val length = minOf(chunkSize, bytes.size - offset)
                                     val chunk = bytes.copyOfRange(offset, offset + length)
-                                    connection.bulkTransfer(endpoint, chunk, chunk.size, 5000)
+                                    val transferred = connection.bulkTransfer(endpoint, chunk, chunk.size, 5000)
+                                    if (transferred < 0) {
+                                        allSuccess = false
+                                        break
+                                    }
                                     offset += length
                                 }
 
                                 connection.releaseInterface(usbInterface)
                                 connection.close()
-                                Log.d(TAG, "✅ Đã in thành công ${bytes.size} bytes ra máy in USB: ${device.productName}")
-                                mainActivity.runOnUiThread {
-                                    Toast.makeText(context, "✅ Đã gửi lệnh in ra máy in: ${device.productName ?: "USB Printer"}", Toast.LENGTH_SHORT).show()
+
+                                if (allSuccess) {
+                                    Log.d(TAG, "✅ Đã in thành công ${bytes.size} bytes ra máy in USB: ${device.productName}")
+                                    mainActivity.runOnUiThread {
+                                        Toast.makeText(mainActivity, "✅ Đã gửi lệnh in ra máy in: ${device.productName ?: "USB Printer"}", Toast.LENGTH_SHORT).show()
+                                    }
+                                    return true
                                 }
-                                return true
                             }
                         }
+                        connection.releaseInterface(usbInterface)
                     }
-                } catch (e: Exception) {
-                    Log.w(TAG, "Thử gửi máy in ${device.productName} thất bại: ${e.message}")
-                    try {
-                        connection?.close()
-                    } catch (_: Exception) {}
                 }
+                connection.close()
+            } catch (e: Exception) {
+                Log.w(TAG, "Lỗi kết nối máy in ${device.productName}: ${e.message}")
+                try {
+                    connection?.close()
+                } catch (_: Exception) {}
             }
         }
 
