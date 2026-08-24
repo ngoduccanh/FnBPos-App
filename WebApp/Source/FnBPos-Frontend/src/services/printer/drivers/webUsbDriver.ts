@@ -59,6 +59,15 @@ interface NavigatorWithHardware extends Navigator {
   };
 }
 
+export interface DiscoveredUsbPrinter {
+  deviceId: number;
+  name: string;
+  vendorId: number;
+  productId: number;
+  hasPermission: boolean;
+  portName?: string;
+}
+
 /**
  * 🔌 WebUsbDriver — Hỗ trợ toàn diện máy in USB trên Android POS & PC
  * Tích hợp 4 cơ chế: RawBT WebSocket (Silent 0ms) + RawBT Silent Intent + Web Serial API + WebUSB
@@ -68,6 +77,26 @@ export class WebUsbDriver {
   private static usbDevice: UsbDeviceLike | null = null;
   private static serialPort: SerialPortLike | null = null;
   private static endpointNumber: number = 1;
+
+  /**
+   * Lấy danh sách tất cả máy in USB đang kết nối vào máy POS (Tên Hãng + Model)
+   */
+  public static async getConnectedPrinters(): Promise<DiscoveredUsbPrinter[]> {
+    const win = typeof window !== 'undefined' ? (window as CustomWindow) : null;
+    const bridge = win?.PosNativeBridge || win?.AndroidPosPrinter || win?.AndroidBridge || win?.Android;
+    if (bridge) {
+      const nativeWithQuery = bridge as AndroidPrinterBridge & { getConnectedUsbPrinters?: () => string };
+      if (typeof nativeWithQuery.getConnectedUsbPrinters === 'function') {
+        try {
+          const raw = nativeWithQuery.getConnectedUsbPrinters();
+          return JSON.parse(raw || '[]') as DiscoveredUsbPrinter[];
+        } catch (err) {
+          console.warn('[WebUsbDriver] Lỗi đọc danh sách máy in:', err);
+        }
+      }
+    }
+    return [];
+  }
 
   /**
    * Kiểm tra thiết bị có hỗ trợ WebUSB hoặc Web Serial không
@@ -81,29 +110,10 @@ export class WebUsbDriver {
    */
   public static async requestPrinter(): Promise<string> {
     // 0. Thử Android Native Bridge trước (Ưu tiên số 1)
-    const win = typeof window !== 'undefined' ? (window as CustomWindow) : null;
-    const bridge = win?.PosNativeBridge || win?.AndroidPosPrinter || win?.AndroidBridge || win?.Android;
-    if (bridge) {
-      const nativeWithQuery = bridge as AndroidPrinterBridge & { getConnectedUsbPrinters?: () => string; showToast?: (msg: string) => void };
-      if (typeof nativeWithQuery.getConnectedUsbPrinters === 'function') {
-        try {
-          const raw = nativeWithQuery.getConnectedUsbPrinters();
-          const list = JSON.parse(raw || '[]') as Array<{ name?: string; vendorId?: number; productId?: number; hasPermission?: boolean }>;
-          if (list.length > 0) {
-            const first = list[0];
-            const name = first.name || `USB Printer (${first.vendorId}:${first.productId})`;
-            console.log('[WebUsbDriver] 🔌 Đã nhận diện máy in từ Android Native:', name);
-            return name;
-          } else {
-            if (typeof nativeWithQuery.showToast === 'function') {
-              nativeWithQuery.showToast('⚠️ Không tìm thấy máy in USB nào cắm vào máy POS!');
-            }
-          }
-        } catch (queryErr) {
-          console.warn('[WebUsbDriver] Lỗi lấy danh sách máy in Native:', queryErr);
-        }
-      }
-      return 'Máy in USB POS Native';
+    const printers = await this.getConnectedPrinters();
+    if (printers.length > 0) {
+      const first = printers[0];
+      return first.name;
     }
 
     const nav = typeof navigator !== 'undefined' ? (navigator as NavigatorWithHardware) : undefined;

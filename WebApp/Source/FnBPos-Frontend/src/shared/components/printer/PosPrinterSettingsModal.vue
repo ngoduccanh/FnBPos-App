@@ -213,25 +213,53 @@
             </div>
           </div>
 
-          <!-- ── B. GIAO DIỆN WEB USB ── -->
+          <!-- ── B. GIAO DIỆN WEB USB (CHUẨN KIOTVIET / SAPO) ── -->
           <div v-if="currentConfig.driver === 'web-usb'" class="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-3">
             <div class="flex items-center justify-between">
               <div>
-                <p class="text-xs font-bold text-slate-800">Kết nối máy in qua cáp USB</p>
-                <p class="text-[11px] text-slate-500">Cắm cáp USB máy in vào máy POS/Android</p>
+                <p class="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                  <span>Máy in qua Cáp USB</span>
+                  <span v-if="usbPrinters.length > 0" class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-700">
+                    <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1 animate-pulse"></span>
+                    {{ usbPrinters.length }} máy in sẵn sàng
+                  </span>
+                </p>
+                <p class="text-[11px] text-slate-500">Tự động nhận diện dòng máy in Xprinter, Epson, POS-80, Bixolon...</p>
               </div>
               <button
-                @click="pairUsbPrinter"
-                class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
+                @click="loadUsbPrinters"
+                :disabled="isLoadingUsb"
+                class="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-1.5"
               >
-                <svg class="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                <svg class="w-3.5 h-3.5" :class="{ 'animate-spin': isLoadingUsb }" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
-                <span>Ghép nối USB</span>
+                <span>{{ isLoadingUsb ? 'Đang quét...' : 'Quét máy in' }}</span>
               </button>
             </div>
-            <div v-if="usbDeviceName" class="text-xs text-emerald-700 bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 font-bold flex items-center gap-2">
-              <span>Đã kết nối: {{ usbDeviceName }}</span>
+
+            <!-- DROPDOWN CHỌN MÁY IN USB (GIỐNG KIOTVIET/SAPO) -->
+            <div v-if="usbPrinters.length > 0" class="space-y-1.5">
+              <label class="block text-xs font-bold text-slate-700 uppercase">
+                Chọn Máy In Cáp USB
+              </label>
+              <select
+                v-model="currentConfig.name"
+                class="w-full px-3.5 py-2.5 bg-white border border-emerald-300 rounded-xl text-xs font-bold text-slate-800 outline-none focus:border-blue-500 transition-all cursor-pointer shadow-xs"
+              >
+                <option v-for="printer in usbPrinters" :key="printer.deviceId" :value="printer.name">
+                  🖨️ {{ printer.name }} ({{ printer.portName || 'Cổng USB' }})
+                </option>
+              </select>
+            </div>
+
+            <div v-else class="text-xs text-amber-700 bg-amber-50 p-3 rounded-xl border border-amber-200 space-y-1">
+              <p class="font-bold flex items-center gap-1.5">
+                <span>⚠️ Chưa phát hiện máy in USB nào</span>
+              </p>
+              <p class="text-[11px] text-amber-600">
+                Hãy đảm bảo máy in đã bật nguồn, cắm cáp USB vào máy POS và bấm nút <strong>Quét máy in</strong> ở trên.
+              </p>
             </div>
           </div>
 
@@ -369,13 +397,14 @@
 import { ref, computed, onMounted } from 'vue';
 import { PrinterStorageService } from '@/services/printer/printerStorageService';
 import { PosPrinterService } from '@/services/printer/posPrinterService';
-import { WebUsbDriver } from '@/services/printer/drivers/webUsbDriver';
+import { WebUsbDriver, type DiscoveredUsbPrinter } from '@/services/printer/drivers/webUsbDriver';
 import { useToast } from '@/shared/components/toast/composables/useToast';
 import { useChildStores } from '@/features/pos/hooks/useChildStores';
 import type { PosPrinterSettings, PrinterDeviceConfig } from '@/services/printer/types/printer.types';
 
 interface AndroidPrinterBridge {
   printUsbBase64?: (data: string) => boolean;
+  getConnectedUsbPrinters?: () => string;
   showToast?: (msg: string) => void;
 }
 
@@ -395,12 +424,13 @@ const emit = defineEmits<{
 
 const toast = useToast();
 const activeTab = ref<'bill' | 'kitchen'>('bill');
+const { stores, activeStore, getStoreName } = useChildStores();
+
 const settings = ref<PosPrinterSettings>(PrinterStorageService.getSettings());
-
-const { childStores, isLoading: isLoadingChildStores, fetchChildStores } = useChildStores();
-
 const qzPrinters = ref<string[]>([]);
+const usbPrinters = ref<DiscoveredUsbPrinter[]>([]);
 const isLoadingPrinters = ref(false);
+const isLoadingUsb = ref(false);
 const isTestingPrint = ref(false);
 const usbDeviceName = ref<string>('');
 
@@ -417,24 +447,6 @@ const currentConfig = computed<PrinterDeviceConfig>({
   }
 });
 
-const getStorePrinter = (storeId: number): string => {
-  if (!currentConfig.value.storePrinterMap) {
-    currentConfig.value.storePrinterMap = {};
-  }
-  return currentConfig.value.storePrinterMap[storeId] || currentConfig.value.name || (qzPrinters.value[0] || '');
-};
-
-const setStorePrinter = (storeId: number, printerName: string) => {
-  if (!currentConfig.value.storePrinterMap) {
-    currentConfig.value.storePrinterMap = {};
-  }
-  currentConfig.value.storePrinterMap[storeId] = printerName;
-  // Cập nhật cả default name nếu cần
-  if (!currentConfig.value.name) {
-    currentConfig.value.name = printerName;
-  }
-};
-
 const loadQzPrinters = async () => {
   isLoadingPrinters.value = true;
   try {
@@ -447,6 +459,30 @@ const loadQzPrinters = async () => {
     }
   } finally {
     isLoadingPrinters.value = false;
+  }
+};
+
+const loadUsbPrinters = async () => {
+  isLoadingUsb.value = true;
+  try {
+    const list = await PosPrinterService.getUsbPrinters();
+    usbPrinters.value = list;
+    if (list.length > 0) {
+      if (!currentConfig.value.name || !list.some(p => p.name === currentConfig.value.name)) {
+        currentConfig.value.name = list[0].name;
+      }
+      toast.showSuccess(`Đã nhận diện: ${list[0].name}`, 'Máy in USB');
+    } else {
+      const name = await WebUsbDriver.requestPrinter();
+      if (name && name !== 'USB Printer Port (QuickPrinter / USB Auto)') {
+        currentConfig.value.name = name;
+      }
+    }
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn('[PosPrinterSettingsModal] Lỗi quét USB:', msg);
+  } finally {
+    isLoadingUsb.value = false;
   }
 };
 
@@ -521,8 +557,9 @@ const handleTestPrint = async () => {
       );
     }
     toast.showSuccess('Đã gửi lệnh in thử nghiệm!', 'Thành công');
-  } catch (err: any) {
-    toast.showError(err?.message || 'In thử thất bại. Vui lòng kiểm tra lại cấu hình!', 'Lỗi in ấn');
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : 'In thử thất bại. Vui lòng kiểm tra lại cấu hình!';
+    toast.showError(msg, 'Lỗi in ấn');
   } finally {
     isTestingPrint.value = false;
   }
@@ -540,6 +577,7 @@ const closeModal = () => {
 
 onMounted(() => {
   loadQzPrinters();
+  loadUsbPrinters();
   fetchChildStores();
 });
 </script>

@@ -31,6 +31,13 @@ export class PosPrinterService {
   }
 
   /**
+   * Lấy danh sách máy in USB có trên máy POS Android (Chuẩn KiotViet / Sapo)
+   */
+  public static async getUsbPrinters() {
+    return WebUsbDriver.getConnectedPrinters();
+  }
+
+  /**
    * 📑 In Hóa Đơn Bán Hàng / Đơn Tạm Tính
    */
   public static async printBill(
