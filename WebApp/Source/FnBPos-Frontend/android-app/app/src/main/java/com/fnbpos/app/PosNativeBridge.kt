@@ -74,14 +74,17 @@ class PosNativeBridge(
             val deviceList = usbManager.deviceList
 
             for (device in deviceList.values) {
-                val obj = JSONObject().apply {
-                    put("name", device.productName ?: "USB Printer (${device.vendorId}:${device.productId})")
-                    put("vendorId", device.vendorId)
-                    put("productId", device.productId)
-                    put("deviceId", device.deviceId)
-                    put("hasPermission", usbManager.hasPermission(device))
+                if (isPrinterDevice(device)) {
+                    val obj = JSONObject().apply {
+                        val displayName = device.productName ?: "Xprinter USB (VID:${device.vendorId} PID:${device.productId})"
+                        put("name", displayName)
+                        put("vendorId", device.vendorId)
+                        put("productId", device.productId)
+                        put("deviceId", device.deviceId)
+                        put("hasPermission", usbManager.hasPermission(device))
+                    }
+                    result.put(obj)
                 }
-                result.put(obj)
             }
         } catch (e: Exception) {
             Log.e(TAG, "Lỗi lấy danh sách máy in USB: ${e.message}", e)
@@ -231,12 +234,32 @@ class PosNativeBridge(
     }
 
     private fun isPrinterDevice(device: UsbDevice): Boolean {
+        // 1. Kiểm tra Printer Class chuẩn (Class 7)
         if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER || device.deviceClass == 7) return true
         for (i in 0 until device.interfaceCount) {
             val iface = device.getInterface(i)
             if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER || iface.interfaceClass == 7) return true
         }
+
+        // 2. Kiểm tra tên thiết bị
         val name = (device.productName ?: "").lowercase()
-        return name.contains("print") || name.contains("pos") || name.contains("xprinter") || name.contains("receipt") || name.contains("thermal")
+        if (name.contains("print") || name.contains("pos") || name.contains("xprinter") || name.contains("receipt") || name.contains("thermal") || name.contains("80") || name.contains("58")) {
+            return true
+        }
+
+        // 3. Hầu hết chip máy in Xprinter (Nuvoton/Winbond/CH340) trên Android có Vendor Class 255 (0xFF) hoặc Class 0 và có OUT Endpoint
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            // Loại trừ chuột / bàn phím (HID class 3)
+            if (iface.interfaceClass != 3) {
+                for (j in 0 until iface.endpointCount) {
+                    val ep = iface.getEndpoint(j)
+                    if (ep.direction == UsbConstants.USB_DIR_OUT) {
+                        return true
+                    }
+                }
+            }
+        }
+        return false
     }
 }

@@ -374,6 +374,17 @@ import { useToast } from '@/shared/components/toast/composables/useToast';
 import { useChildStores } from '@/features/pos/hooks/useChildStores';
 import type { PosPrinterSettings, PrinterDeviceConfig } from '@/services/printer/types/printer.types';
 
+interface AndroidPrinterBridge {
+  printUsbBase64?: (data: string) => boolean;
+  showToast?: (msg: string) => void;
+}
+
+interface CustomWindow extends Window {
+  PosNativeBridge?: AndroidPrinterBridge;
+  AndroidPosPrinter?: AndroidPrinterBridge;
+  Android?: AndroidPrinterBridge;
+}
+
 const props = defineProps<{
   isOpen: boolean;
 }>();
@@ -441,14 +452,33 @@ const loadQzPrinters = async () => {
 
 const pairUsbPrinter = async () => {
   try {
+    const win = typeof window !== 'undefined' ? (window as CustomWindow) : null;
+    const bridge = win?.PosNativeBridge || win?.AndroidPosPrinter || win?.Android;
+    const bridgeWithQuery = bridge as AndroidPrinterBridge & { getConnectedUsbPrinters?: () => string; showToast?: (msg: string) => void };
+
+    if (bridgeWithQuery && typeof bridgeWithQuery.getConnectedUsbPrinters === 'function') {
+      try {
+        const raw = bridgeWithQuery.getConnectedUsbPrinters();
+        const list = JSON.parse(raw || '[]') as Array<{ name?: string; vendorId?: number; productId?: number; hasPermission?: boolean }>;
+        if (list.length === 0) {
+          alert('⚠️ Android hiện tại CHƯA NHÌN THẤY thiết bị USB nào!\n\n👉 Bạn hãy thử:\n1. Cắm sang cổng USB khác ở mặt sau/dưới gầm máy POS.\n2. Rút dây cắm lại thật chặt và bật nguồn máy in.');
+        } else {
+          alert(`✅ Đã tìm thấy ${list.length} thiết bị USB:\n` + list.map(d => `- ${d.name} (Quyền: ${d.hasPermission ? 'ĐÃ CÓ' : 'CHƯA CÓ'})`).join('\n'));
+        }
+      } catch (e: unknown) {
+        console.warn('Lỗi chẩn đoán USB:', e);
+      }
+    }
+
     const name = await WebUsbDriver.requestPrinter();
     if (name) {
       usbDeviceName.value = name;
       currentConfig.value.name = name;
       toast.showSuccess(`Đã ghép nối USB: ${name}`, 'Máy in USB');
     }
-  } catch (err: any) {
-    toast.showError(err?.message || 'Không thể ghép nối máy in USB', 'Lỗi USB');
+  } catch (err: unknown) {
+    const msg = err instanceof Error ? err.message : String(err);
+    toast.showError(msg, 'Lỗi USB');
   }
 };
 
