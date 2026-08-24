@@ -39,6 +39,7 @@ interface SerialPortLike {
 }
 
 interface CustomWindow extends Window {
+  PosNativeBridge?: AndroidPrinterBridge;
   AndroidPosPrinter?: AndroidPrinterBridge;
   AndroidBridge?: AndroidPrinterBridge;
   Android?: AndroidPrinterBridge;
@@ -127,8 +128,8 @@ export class WebUsbDriver {
     // ── CƠ CHẾ 0: IN TRỰC TIẾP QUA NATIVE ANDROID BRIDGE (0ms SIÊU TỐC, CHUẨN KIOTVIET/SAPO) ──
     const win = typeof window !== 'undefined' ? (window as CustomWindow) : null;
     if (win) {
-      // Hỗ trợ tất cả các tên Interface phổ biến trên Android Native App
-      const bridge = win.AndroidPosPrinter || win.AndroidBridge || win.Android || win.PosPrinter || win.printer || win.JSBridge;
+      // Hỗ trợ tất cả các tên Interface phổ biến trên Android Native App (Ưu tiên PosNativeBridge)
+      const bridge = win.PosNativeBridge || win.AndroidPosPrinter || win.AndroidBridge || win.Android || win.PosPrinter || win.printer || win.JSBridge;
       if (bridge) {
         try {
           if (typeof bridge.printUsbBase64 === 'function') {

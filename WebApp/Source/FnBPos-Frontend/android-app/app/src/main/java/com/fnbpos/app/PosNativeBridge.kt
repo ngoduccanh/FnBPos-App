@@ -153,7 +153,11 @@ class PosNativeBridge(
             return false
         }
 
-        for (device in deviceList.values) {
+        // Lọc các thiết bị là máy in trước (tránh hỏi nhầm chuột/bàn phím/máy quét mã vạch)
+        val printerDevices = deviceList.values.filter { isPrinterDevice(it) }
+        val targetDevices = if (printerDevices.isNotEmpty()) printerDevices else deviceList.values.toList()
+
+        for (device in targetDevices) {
             // 1. Kiểm tra quyền truy cập USB
             if (!usbManager.hasPermission(device)) {
                 val flags = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) PendingIntent.FLAG_IMMUTABLE else 0
@@ -161,7 +165,7 @@ class PosNativeBridge(
                     context, 0, Intent(ACTION_USB_PERMISSION), flags
                 )
                 mainActivity.runOnUiThread {
-                    Toast.makeText(context, "🔐 Vui lòng bấm [Cho phép / OK] trên màn hình để cấp quyền máy in!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "🔐 Vui lòng bấm [Cho phép / OK] trên màn hình để cấp quyền máy in: ${device.productName ?: ""}", Toast.LENGTH_LONG).show()
                     usbManager.requestPermission(device, permissionIntent)
                 }
                 return false
@@ -211,5 +215,15 @@ class PosNativeBridge(
             Toast.makeText(context, "⚠️ Không tìm thấy Endpoint máy in phù hợp trên cổng USB.", Toast.LENGTH_LONG).show()
         }
         return false
+    }
+
+    private fun isPrinterDevice(device: UsbDevice): Boolean {
+        if (device.deviceClass == UsbConstants.USB_CLASS_PRINTER || device.deviceClass == 7) return true
+        for (i in 0 until device.interfaceCount) {
+            val iface = device.getInterface(i)
+            if (iface.interfaceClass == UsbConstants.USB_CLASS_PRINTER || iface.interfaceClass == 7) return true
+        }
+        val name = (device.productName ?: "").lowercase()
+        return name.contains("print") || name.contains("pos") || name.contains("xprinter") || name.contains("receipt") || name.contains("thermal")
     }
 }
